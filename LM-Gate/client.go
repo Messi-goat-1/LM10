@@ -1,4 +1,4 @@
-package main
+package lmgate
 
 import (
 	"errors"
@@ -9,8 +9,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-//========= Clint and server +=======
-
 type ChunkMessage struct {
 	FileID  string
 	ChunkID int
@@ -20,6 +18,7 @@ type ChunkMessage struct {
 }
 
 var (
+	chunkStore        = make(map[string]map[int][]byte)
 	ErrInvalidMessage = errors.New("invalid message")
 	ErrMissingChunk   = errors.New("missing chunk")
 )
@@ -50,6 +49,7 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+// validatePath ensures the given path exists and points to a file.
 func validatePath(path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -63,6 +63,7 @@ func validatePath(path string) error {
 	return nil
 }
 
+// SplitFile reads a file and streams it as fixed-size byte chunks.
 func SplitFile(path string, chunkSize int64) (<-chan []byte, <-chan error) {
 	chunks := make(chan []byte)
 	errs := make(chan error, 1)
@@ -100,7 +101,7 @@ func SplitFile(path string, chunkSize int64) (<-chan []byte, <-chan error) {
 	return chunks, errs
 }
 
-// توليد ID للملف
+// GenerateFileID creates a stable identifier based on file name and size.
 func GenerateFileID(path string) string {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -131,7 +132,7 @@ type Sender interface {
 	Send(msg ChunkMessage) error
 }
 
-// رفع الملف (orchestrator)
+// UploadFile orchestrates file upload by sending all chunks then EOF.
 func UploadFile(path string, chunkSize int64, sender Sender) error {
 	if sender == nil {
 		return errors.New("sender is nil")
@@ -165,7 +166,7 @@ func UploadFile(path string, chunkSize int64, sender Sender) error {
 	return SendEOF(fileID, sender)
 }
 
-// بناءرسالة
+// BuildChunkMessage builds a chunk message for a single file piece.
 func BuildChunkMessage(fileID string, chunkID int, total int, data []byte) ChunkMessage {
 	return ChunkMessage{
 		FileID:  fileID,
@@ -176,7 +177,7 @@ func BuildChunkMessage(fileID string, chunkID int, total int, data []byte) Chunk
 	}
 }
 
-// ارسال نهاية الملف
+// SendEOF notifies the receiver that all chunks have been sent.
 func SendEOF(fileID string, sender Sender) error {
 	msg := ChunkMessage{
 		FileID: fileID,
@@ -185,112 +186,9 @@ func SendEOF(fileID string, sender Sender) error {
 	return sender.Send(msg)
 }
 
-var chunkStore = make(map[string]map[int][]byte)
-
 func resetChunkStore() {
 	chunkStore = make(map[string]map[int][]byte)
 }
 
-//===== Server ====
-
-func OnMessage(msg ChunkMessage) error {
-	if err := ValidateMessage(msg); err != nil {
-		return err
-	}
-
-	if msg.IsEOF {
-		if !IsFileComplete(msg.FileID) {
-			return ErrMissingChunk
-		}
-
-		data, err := AssembleFile(msg.FileID)
-		if err != nil {
-			return err
-		}
-
-		if err := ProcessFile(msg.FileID, data); err != nil {
-			return err
-		}
-
-		Cleanup(msg.FileID)
-		return nil
-	}
-
-	return StoreChunk(msg)
-}
-
-// التحقق من الرسالة
-func ValidateMessage(msg ChunkMessage) error {
-	if msg.FileID == "" {
-		return ErrInvalidMessage
-	}
-
-	if !msg.IsEOF && len(msg.Data) == 0 {
-		return ErrInvalidMessage
-	}
-
-	return nil
-}
-
-// تخزين موقت لل chunks
-func StoreChunk(msg ChunkMessage) error {
-	if _, ok := chunkStore[msg.FileID]; !ok {
-		chunkStore[msg.FileID] = make(map[int][]byte)
-	}
-	chunkStore[msg.FileID][msg.ChunkID] = msg.Data
-	return nil
-}
-
-// التحقق من اكتمال الملف
-func IsFileComplete(fileID string) bool {
-	chunks, ok := chunkStore[fileID]
-	if !ok {
-		return false
-	}
-
-	for i := 0; i < len(chunks); i++ {
-		if _, ok := chunks[i]; !ok {
-			return false
-		}
-	}
-	return true
-}
-
-// دمج الملف
-func AssembleFile(fileID string) ([]byte, error) {
-	chunks, ok := chunkStore[fileID]
-	if !ok {
-		return nil, errors.New("file not found")
-	}
-
-	var result []byte
-	for i := 0; i < len(chunks); i++ {
-		result = append(result, chunks[i]...)
-	}
-	return result, nil
-}
-
-// التحليل - معالجة
-func ProcessFile(fileID string, data []byte) error {
-	fmt.Printf("Processing file %s (size=%d bytes)\n", fileID, len(data))
-	return nil
-}
-
-// تنظيف الذاكرة
-func Cleanup(fileID string) {
-	delete(chunkStore, fileID)
-}
-
-// ---------------
-type FakeSender struct{}
-
-func (f *FakeSender) Send(msg ChunkMessage) error {
-	return OnMessage(msg)
-}
-func main() {
-	sender := &FakeSender{}
-	err := UploadFile("test.pcap", 1024*1024, sender)
-	if err != nil {
-		panic(err)
-	}
-}
+// تحسين مهم لازم اسوي دالة تاكد انه ترتيب وصل صح يعني من 0 الى رقم
+// اسوي دالة تحقق من حجم ملف صح
