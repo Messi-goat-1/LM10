@@ -1,8 +1,10 @@
 package lmgate
 
 import (
-	"errors"
+	"LM-Gate/analysis"
 	"fmt"
+	"os"
+	"path/filepath"
 )
 
 // OnMessage is the server entry point for handling incoming chunk messages.
@@ -11,27 +13,29 @@ func OnMessage(msg ChunkMessage) error {
 		return err
 	}
 
+	// إذا كانت الرسالة هي علامة النهاية
 	if msg.IsEOF {
-		if !IsFileComplete(msg.FileID) {
-			return ErrMissingChunk
-		}
-
-		data, err := AssembleFile(msg.FileID)
+		// 1. تجميع الملف والحصول على مساره المادي
+		filePath, err := AssembleFile(msg.FileID)
 		if err != nil {
+			return fmt.Errorf("failed to assemble file: %v", err)
+		}
+
+		// 2. البدء في معالجة الملف (التحليل)
+		if err := ProcessFile(msg.FileID, filePath); err != nil {
 			return err
 		}
 
-		if err := ProcessFile(msg.FileID, data); err != nil {
-			return err
-		}
-
+		// 3. تنظيف القطع المؤقتة بعد التجميع (يتم تنفيذها هنا فقط)
 		Cleanup(msg.FileID)
 		return nil
 	}
 
+	// إذا كانت قطعة عادية، يتم تخزينها على القرص
 	return StoreChunk(msg)
 }
 
+// تأكد أن هذا هو القوس الوحيد في النهاية
 // ValidateMessage performs basic validation on incoming messages.
 func ValidateMessage(msg ChunkMessage) error {
 	if msg.FileID == "" {
@@ -46,52 +50,68 @@ func ValidateMessage(msg ChunkMessage) error {
 }
 
 // StoreChunk temporarily stores a file chunk in memory.
+// StoreChunk - التعديل الجديد لحفظ البيانات على القرص بدلاً من الذاكرة
 func StoreChunk(msg ChunkMessage) error {
-	if _, ok := chunkStore[msg.FileID]; !ok {
-		chunkStore[msg.FileID] = make(map[int][]byte)
+	tempDir := fmt.Sprintf("temp_chunks/%s", msg.FileID)
+
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		return err
 	}
-	chunkStore[msg.FileID][msg.ChunkID] = msg.Data
-	return nil
+
+	chunkPath := filepath.Join(tempDir, fmt.Sprintf("part_%d", msg.ChunkID))
+
+	return os.WriteFile(chunkPath, msg.Data, 0644)
 }
 
 // IsFileComplete checks whether all chunks for a file are present.
 func IsFileComplete(fileID string) bool {
-	chunks, ok := chunkStore[fileID]
-	if !ok {
+	tempDir := fmt.Sprintf("temp_chunks/%s", fileID)
+	files, err := os.ReadDir(tempDir)
+	if err != nil {
 		return false
 	}
 
-	for i := 0; i < len(chunks); i++ {
-		if _, ok := chunks[i]; !ok {
-			return false
-		}
-	}
-	return true
+	return len(files) > 0
 }
 
 // AssembleFile reconstructs the original file from stored chunks.
-func AssembleFile(fileID string) ([]byte, error) {
-	chunks, ok := chunkStore[fileID]
-	if !ok {
-		return nil, errors.New("file not found")
+func AssembleFile(fileID string) (string, error) {
+	tempDir := filepath.Join("temp_chunks", fileID)
+	finalDir := "uploads"
+	os.MkdirAll(finalDir, 0755)
+
+	finalPath := filepath.Join(finalDir, fileID+".pcap")
+
+	out, err := os.Create(finalPath)
+	if err != nil {
+		return "", err
+	}
+	defer out.Close()
+
+	// دمج القطع بترتيب متسلسل
+	for i := 0; ; i++ {
+		chunkPath := filepath.Join(tempDir, fmt.Sprintf("part_%d", i))
+		data, err := os.ReadFile(chunkPath)
+		if err != nil {
+			break // توقف عند عدم العثور على القطعة التالية
+		}
+		out.Write(data)
 	}
 
-	var result []byte
-	for i := 0; i < len(chunks); i++ {
-		result = append(result, chunks[i]...)
-	}
-	return result, nil
+	return finalPath, nil
 }
 
 // ProcessFile handles the fully assembled file (analysis, parsing, etc).
-func ProcessFile(fileID string, data []byte) error {
-	fmt.Printf("Processing file %s (size=%d bytes)\n", fileID, len(data))
-	return nil
+// تعديل لاستقبال مسار الملف (string) بدلاً من []byte
+// في ملف server.go
+// داخل server.go
+func ProcessFile(fileID string, filePath string) error {
+	return analysis.AnalyzePCAP(fileID, filePath)
 }
 
 // Cleanup removes all stored data related to a file.
 func Cleanup(fileID string) {
-	delete(chunkStore, fileID)
+	os.RemoveAll(filepath.Join("temp_chunks", fileID)) // حذف المجلد من القرص
 }
 
 // ---------------

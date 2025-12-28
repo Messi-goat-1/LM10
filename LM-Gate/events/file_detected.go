@@ -1,5 +1,6 @@
 package events
 
+// FileDetectedPayload تفاصيل الملف التقنية
 type FileDetectedPayload struct {
 	FileID      string `json:"file_id"`
 	FileName    string `json:"file_name"`
@@ -9,8 +10,9 @@ type FileDetectedPayload struct {
 	StorageHint string `json:"storage_hint"`
 }
 
-// FileDetectedEvent = إشعار بوجود ملف
+// FileDetectedEvent الحدث الرئيسي
 type FileDetectedEvent struct {
-	FileName string
-	Size     int64
+	Payload FileDetectedPayload `json:"payload"`
+
+	Timestamp string `json:"timestamp"`
 }

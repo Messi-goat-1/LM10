@@ -7,11 +7,11 @@ import (
 
 // FileDetectedHandler يربط event مع service
 type FileDetectedHandler struct {
-	fileService *services.FileService
+	fileService *services.Manager
 }
 
 // constructor
-func NewFileDetectedHandler(fs *services.FileService) *FileDetectedHandler {
+func NewFileDetectedHandler(fs *services.Manager) *FileDetectedHandler {
 	return &FileDetectedHandler{
 		fileService: fs,
 	}
@@ -19,9 +19,15 @@ func NewFileDetectedHandler(fs *services.FileService) *FileDetectedHandler {
 
 // Handle تُستدعى عند وصول الحدث
 
+// file_detected.go
+
 func (h *FileDetectedHandler) Handle(event events.FileDetectedEvent) {
+	// تمرير كل البيانات الجديدة من الـ Payload إلى الـ Service
 	h.fileService.OnFileDetected(
-		event.FileName,
-		event.Size,
+		event.Payload.FileID,
+		event.Payload.FileName,
+		event.Payload.SizeBytes,
+		event.Payload.FileType,
+		event.Payload.Checksum,
 	)
 }
