@@ -17,25 +17,28 @@ func GetFileHandle(filePath string) (*pcap.Handle, error) {
 	return handle, nil
 }
 
-// RunFullAnalysis يقوم بالتحليل الفعلي للحزم مع مراقبة السياق
+// RunFullAnalysis performs the actual packet analysis.
+// تمت إضافة Context لدعم الإلغاء أو المهلة الزمانية (Timeout).
 func RunFullAnalysis(ctx context.Context, handle *pcap.Handle) error {
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 
 	count := 0
+	// استخدام for loop مع select لمراقبة الـ Context
 	for {
 		select {
 		case <-ctx.Done():
-			// إرجاع سبب توقف السياق (Timeout أو Cancellation)
-			return ctx.Err()
+			// إذا تم إلغاء السياق (بسبب timeout أو إلغاء يدوي)
+			return ctx.Err()[cite:1]
 		case packet, ok := <-packetSource.Packets():
 			if !ok {
-				return nil // انتهى الملف بنجاح
+				// انتهى الملف
+				return nil
 			}
 			count++
 			fmt.Printf("\n--- Packet #%d ---\n", count)
 			fmt.Println(packet.String())
 
-			// FIXME: حد مؤقت للتجربة [cite: 13, 14]
+			// FIXME: حد مؤقت للتجربة فقط [cite: 13, 14]
 			if count >= 2 {
 				return nil
 			}
@@ -43,10 +46,10 @@ func RunFullAnalysis(ctx context.Context, handle *pcap.Handle) error {
 	}
 }
 
-// AnalyzePCAP هي الدالة الأساسية التي يتم استدعاؤها
+// AnalyzePCAP is the main function called by server.go.
 func AnalyzePCAP(ctx context.Context, fileID string, filePath string) error {
-	// الخطوة 1: فتح ملف الـ PCAP واستقبال القيمتين (handle و err) [cite: 11]
-	handle, err := GetFileHandle(filePath)
+	// الخطوة 1: فتح ملف PCAP
+	handle, err := GetFileHandle(filePath)[cite:11]
 	if err != nil {
 		return err
 	}

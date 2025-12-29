@@ -57,25 +57,23 @@ func (s *Manager) OnFileDetected(
 }
 
 // OnChunkReceived handles an incoming file chunk.
+//
+// NOTE: This function stores the chunk on disk.
+// FIXME: No validation for chunkIndex range or duplicate chunks.
 func (s *Manager) OnChunkReceived(fileID string, chunkIndex int, total int, data []byte) error {
-
 	// Create a temporary directory for the file if it does not exist
 	fileDir := filepath.Join(s.tempDir, fileID)
-	if err := os.MkdirAll(fileDir, 0755); err != nil {
-		return err
-	}
+	os.MkdirAll(fileDir, 0755)
 
+	// تحديد مسار chunk
 	chunkPath := filepath.Join(fileDir, fmt.Sprintf("part_%d", chunkIndex))
 
+	// منع إعادة كتابة chunk (Idempotency)
 	if existing, err := os.ReadFile(chunkPath); err == nil {
-		// chunk موجود سابقًا
 		if bytes.Equal(existing, data) {
 			return nil // duplicate safe chunk
 		}
-		return fmt.Errorf(
-			"chunk %d already exists with different content",
-			chunkIndex,
-		)
+		return fmt.Errorf("chunk %d already exists with different content", chunkIndex)
 	}
 
 	// كتابة chunk لأول مرة
@@ -83,22 +81,8 @@ func (s *Manager) OnChunkReceived(fileID string, chunkIndex int, total int, data
 		return err
 	}
 
+	// Check if all chunks have been received
 	if s.isComplete(fileDir, total) {
-
-		// marker file to ensure reassemble runs once
-		reassembleFlag := filepath.Join(fileDir, ".reassembling")
-
-		// إذا بدأت reassemble سابقًا → تجاهل
-		if _, err := os.Stat(reassembleFlag); err == nil {
-			return nil
-		}
-
-		// إنشاء marker (lock filesystem)
-		if err := os.WriteFile(reassembleFlag, []byte("1"), 0644); err != nil {
-			return err
-		}
-
-		// Reassemble in background
 		go s.reassemble(fileID, total)
 	}
 

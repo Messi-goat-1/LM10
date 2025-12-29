@@ -1,5 +1,7 @@
 package main
 
+// استبدل project_name باسم مشروعك في go.mod
+
 /*
 func main() {
 	// 1. تهيئة الخدمات والمعالجات (استخدام الاسم الجديد Manager)

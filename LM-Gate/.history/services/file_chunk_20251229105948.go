@@ -1,7 +1,6 @@
 package services
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 type Manager struct {
 	// tempDir stores temporary chunk files.
 	tempDir string
+
 	// storageDir stores final assembled files.
 	storageDir string
 }
@@ -28,11 +28,7 @@ func NewManager() *Manager {
 		tempDir:    "./temp_chunks",
 		storageDir: "./uploads",
 	}
-
-	// Ensure directories exist
-	os.MkdirAll(s.tempDir, 0755)
-	os.MkdirAll(s.storageDir, 0755)
-
+	// Directory creation logic can be added here
 	return s
 }
 
@@ -57,47 +53,23 @@ func (s *Manager) OnFileDetected(
 }
 
 // OnChunkReceived handles an incoming file chunk.
+//
+// NOTE: This function stores the chunk on disk.
+// FIXME: No validation for chunkIndex range or duplicate chunks.
 func (s *Manager) OnChunkReceived(fileID string, chunkIndex int, total int, data []byte) error {
-
 	// Create a temporary directory for the file if it does not exist
 	fileDir := filepath.Join(s.tempDir, fileID)
-	if err := os.MkdirAll(fileDir, 0755); err != nil {
-		return err
-	}
+	os.MkdirAll(fileDir, 0755)
 
+	// Write the chunk to disk as part_<index>
 	chunkPath := filepath.Join(fileDir, fmt.Sprintf("part_%d", chunkIndex))
-
-	if existing, err := os.ReadFile(chunkPath); err == nil {
-		// chunk موجود سابقًا
-		if bytes.Equal(existing, data) {
-			return nil // duplicate safe chunk
-		}
-		return fmt.Errorf(
-			"chunk %d already exists with different content",
-			chunkIndex,
-		)
-	}
-
-	// كتابة chunk لأول مرة
-	if err := os.WriteFile(chunkPath, data, 0644); err != nil {
+	err := os.WriteFile(chunkPath, data, 0644)
+	if err != nil {
 		return err
 	}
 
+	// Check if all chunks have been received
 	if s.isComplete(fileDir, total) {
-
-		// marker file to ensure reassemble runs once
-		reassembleFlag := filepath.Join(fileDir, ".reassembling")
-
-		// إذا بدأت reassemble سابقًا → تجاهل
-		if _, err := os.Stat(reassembleFlag); err == nil {
-			return nil
-		}
-
-		// إنشاء marker (lock filesystem)
-		if err := os.WriteFile(reassembleFlag, []byte("1"), 0644); err != nil {
-			return err
-		}
-
 		// Reassemble in background
 		go s.reassemble(fileID, total)
 	}
@@ -110,14 +82,8 @@ func (s *Manager) OnChunkReceived(fileID string, chunkIndex int, total int, data
 // NOTE: This compares file count with total chunks.
 // FIXME: Does not validate chunk order or missing indices.
 func (s *Manager) isComplete(dir string, total int) bool {
-	for i := 0; i < total; i++ {
-		partPath := filepath.Join(dir, fmt.Sprintf("part_%d", i))
-		if _, err := os.Stat(partPath); err != nil {
-			// part_i غير موجود
-			return false
-		}
-	}
-	return true
+	files, _ := os.ReadDir(dir)
+	return len(files) == total
 }
 
 // reassemble merges all chunks into a final file.
@@ -126,30 +92,35 @@ func (s *Manager) isComplete(dir string, total int) bool {
 // TODO: Add checksum verification after reassembly.
 // FIXME: No rollback if reassembly fails midway.
 func (s *Manager) reassemble(fileID string, totalChunks int) error {
-	tempDir := filepath.Join(s.tempDir, fileID)
 	finalPath := filepath.Join(s.storageDir, fileID)
 
-	out, err := os.Create(finalPath)
+	// Create the final output file
+	dst, err := os.Create(finalPath)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer dst.Close()
 
+	// Read and merge chunks in correct order
 	for i := 0; i < totalChunks; i++ {
-		partPath := filepath.Join(tempDir, fmt.Sprintf("part_%d", i))
+		chunkPath := filepath.Join(
+			s.tempDir,
+			fileID,
+			fmt.Sprintf("part_%d", i),
+		)
 
-		data, err := os.ReadFile(partPath)
+		chunkData, err := os.ReadFile(chunkPath)
 		if err != nil {
-			return fmt.Errorf("missing chunk %d: %w", i, err)
-		}
-
-		if _, err := out.Write(data); err != nil {
 			return err
 		}
+
+		// Write chunk data to final file
+		dst.Write(chunkData)
 	}
 
-	// تنظيف الملفات المؤقتة
-	return os.RemoveAll(tempDir)
+	// Cleanup temporary directory after successful merge
+	os.RemoveAll(filepath.Join(s.tempDir, fileID))
+	return nil
 }
 
 /*

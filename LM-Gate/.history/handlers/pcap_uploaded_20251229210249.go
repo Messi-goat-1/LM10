@@ -4,7 +4,6 @@ import (
 	"LM-Gate/events"
 	"LM-Gate/services"
 	"context"
-	"fmt"
 )
 
 // PCAPAnalyzeHandler routes PCAP analysis events to the PCAP service.
@@ -30,18 +29,9 @@ func NewPCAPAnalyzeHandler(s *services.PCAPService) *PCAPAnalyzeHandler {
 // NOTE: This is usually called by the dispatcher when routingKey is "pcap.analyze".
 // FIXME: No validation is done on FileID/FilePath here.
 func (h *PCAPAnalyzeHandler) Handle(event events.PCAPAnalyzeEvent) error {
+	// التصحيح: تمرير context.Background() أو سياق بمهلة زمنية
 	ctx := context.Background()
-
-	// Start analysis in a background goroutine
-	go func() {
-		err := h.pcapService.Analyze(ctx, event.FileID, event.FilePath)
-		if err != nil {
-			// Log the error (Analysis failed in background)
-			fmt.Printf("Background analysis failed for %s: %v\n", event.FileID, err)
-		}
-	}()
-
-	return nil // Return immediately to acknowledge the event
+	return h.pcapService.Analyze(ctx, event.FileID, event.FilePath)
 }
 
 /*

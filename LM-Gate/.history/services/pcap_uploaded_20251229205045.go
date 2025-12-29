@@ -1,8 +1,8 @@
 package services
 
 import (
-	"LM-Gate/analysis" // تأكد أن المسار يطابق مشروعك
-	"context"          //
+	"LM-Gate/analysis" // تأكد من مسار الـ package الصحيح لديك
+	"context"
 	"fmt"
 
 	"github.com/google/gopacket/pcap"
@@ -14,16 +14,16 @@ func NewPCAPService() *PCAPService {
 	return &PCAPService{}
 }
 
-// Analyze يقوم بفتح الملف وتمرير السياق لمحرك التحليل
+// Analyze يقوم بتنفيذ منطق التحليل الأساسي.
+// تم تحديث التوقيع لاستقبال Context لضمان استقرار النظام.
 func (s *PCAPService) Analyze(ctx context.Context, fileID string, filePath string) error {
-	// 1. فتح ملف الـ PCAP
+	// فتح ملف الـ PCAP من القرص [cite: 8]
 	handle, err := pcap.OpenOffline(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to open PCAP (%s): %w", fileID, err)
 	}
 	defer handle.Close()
 
-	// 2. تمرير الـ ctx والـ handle إلى RunFullAnalysis
-	// تأكد من أن RunFullAnalysis في حزمة analysis تستقبل (context.Context, *pcap.Handle)
+	// استدعاء محرك التحليل وتمرير الـ Context
 	return analysis.RunFullAnalysis(ctx, handle)
 }

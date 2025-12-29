@@ -203,3 +203,102 @@ Dispatch
 7	Event versioning	events/event.go
 8	Logging	services / handlers
 9	Tests	services / handlers
+
+--------------------------------
+🛠️ إصلاح مشاكل الأحداث (Event Hardening)
+🔴 المشكلة 1: عدم التحقق من JSON (خطر)
+📂 الملف
+handlers/dispatcher.go
+
+📍 المكان
+
+داخل الدالة:
+
+func (d *EventDispatcher) Dispatch(routingKey string, data []byte) error
+
+❌ الوضع الحالي (تقريبًا)
+json.Unmarshal(data, &event)
+
+✅ الحل
+
+تحقق من الخطأ وأوقف الحدث إذا كان فاسدًا:
+
+if err := json.Unmarshal(data, &event); err != nil {
+    return fmt.Errorf("invalid JSON for %s: %w", routingKey, err)
+}
+
+
+📌 النتيجة:
+
+لا event فاسد يمر
+
+لا panic
+
+أخطاء واضحة في اللوق
+
+🔴 المشكلة 2: Version موجود لكن غير مستخدم
+📂 الملفات
+events/event.go
+handlers/dispatcher.go
+
+1️⃣ عرّف version رسميًا
+📂 events/event.go
+const CurrentEventVersion = 1
+
+2️⃣ تحقق من version داخل dispatcher
+📂 handlers/dispatcher.go
+if event.Version != events.CurrentEventVersion {
+    return fmt.Errorf(
+        "unsupported event version %d",
+        event.Version,
+    )
+}
+
+
+📌 النتيجة:
+
+أي تغيير مستقبلي يكون محمي
+
+Backward compatibility واضح
+
+🔴 المشكلة 3: لا يوجد Contract Tests للأحداث
+📂 الملفات الجديدة (مقترحة)
+events/contracts_test.go
+
+🧪 اختبارات لازم تضيفها
+func TestContract_FileChunkEvent(t *testing.T)
+func TestContract_FileDetectedEvent(t *testing.T)
+func TestContract_PCAPAnalyzeEvent(t *testing.T)
+
+📍 ماذا تختبر؟
+
+داخل كل اختبار:
+
+Marshal → Unmarshal
+
+تطابق الحقول
+
+عدم فقدان البيانات
+
+مثال بسيط
+data, _ := json.Marshal(event)
+var decoded events.FileChunkEvent
+json.Unmarshal(data, &decoded)
+
+if decoded.Payload.FileID != event.Payload.FileID {
+    t.Fatal("contract broken")
+}
+
+
+📌 النتيجة:
+
+أي كسر في العقد ينكشف فورًا
+
+أمان عالي عند refactor
+
+🧠 خريطة الإصلاح السريعة
+المشكلة	الملف	الحل
+JSON فاسد	handlers/dispatcher.go	تحقق Unmarshal
+Version غير مستخدم	events/event.go	const version
+Version غير مفحوص	handlers/dispatcher.go	check version
+لا Contract Test	events/contracts_test.go	add tests

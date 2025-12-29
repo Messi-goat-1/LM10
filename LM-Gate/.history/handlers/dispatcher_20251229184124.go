@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"LM-Gate/events"
-	"encoding/json"
 	"fmt"
 )
 
@@ -30,34 +28,15 @@ func NewEventDispatcher() *EventDispatcher {
 func (d *EventDispatcher) RegisterHandler(routingKey string, handler Handler) {
 	d.handlers[routingKey] = handler
 }
+
+// Dispatch يقوم بتوجيه البيانات إلى المعالج المناسب.
+// إذا لم يوجد معالج مسجل للـ key، فإنه يعيد خطأ.
 func (d *EventDispatcher) Dispatch(routingKey string, data []byte) error {
-	// 1. فك تشفير الغلاف الخارجي للتحقق من الإصدار
-	var baseEvent events.Event
-	if err := json.Unmarshal(data, &baseEvent); err != nil {
-		return fmt.Errorf("failed to unmarshal event envelope: %w", err)
-	}
-
-	// 2. التحقق من التوافقية (Compatibility Check)
-	// نتحقق من حقل Version الموجود في هيكل Event
-	if baseEvent.Version != 1 {
-		return fmt.Errorf("unsupported event version: %d (expected version 1)", baseEvent.Version)
-	}
-
-	// 3. البحث عن المعالج المسجل
 	handler, exists := d.handlers[routingKey]
 	if !exists {
 		return fmt.Errorf("unknown routing key: %s", routingKey)
 	}
 
-	// 4. تمرير البيانات للمعالج المتخصص
+	// تنفيذ المعالج المسجل مباشرة
 	return handler.Handle(data)
-}
-
-func (h *FileChunkHandler) Handle(data []byte) error {
-	var event events.FileChunkEvent
-	if err := json.Unmarshal(data, &event); err != nil {
-		return err
-	}
-	// تنفيذ المنطق الخاص بك هنا
-	return nil
 }

@@ -57,7 +57,12 @@ func (s *Manager) OnFileDetected(
 }
 
 // OnChunkReceived handles an incoming file chunk.
-func (s *Manager) OnChunkReceived(fileID string, chunkIndex int, total int, data []byte) error {
+func (s *Manager) OnChunkReceived(
+	fileID string,
+	chunkIndex int,
+	total int,
+	data []byte,
+) error {
 
 	// Create a temporary directory for the file if it does not exist
 	fileDir := filepath.Join(s.tempDir, fileID)
@@ -65,8 +70,12 @@ func (s *Manager) OnChunkReceived(fileID string, chunkIndex int, total int, data
 		return err
 	}
 
+	// تحديد مسار chunk
 	chunkPath := filepath.Join(fileDir, fmt.Sprintf("part_%d", chunkIndex))
 
+	// ----------------------------------------------------
+	// Problem #2: Idempotent Chunk Write
+	// ----------------------------------------------------
 	if existing, err := os.ReadFile(chunkPath); err == nil {
 		// chunk موجود سابقًا
 		if bytes.Equal(existing, data) {
@@ -83,6 +92,9 @@ func (s *Manager) OnChunkReceived(fileID string, chunkIndex int, total int, data
 		return err
 	}
 
+	// ----------------------------------------------------
+	// Problem #3: Prevent Multiple Reassembly
+	// ----------------------------------------------------
 	if s.isComplete(fileDir, total) {
 
 		// marker file to ensure reassemble runs once
