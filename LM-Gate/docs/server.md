@@ -1,58 +1,123 @@
-الخلاصة (دورة حياة الملف):server.go
-1. دالة OnMessage(msg ChunkMessage)
-هي "القلب النابض" للملف والنقطة التي تستقبل أي رسالة قادمة:
 
-التحقق: تبدأ بالتأكد من أن الرسالة صالحة عبر ValidateMessage.
+---
 
-إذا كانت الرسالة جزءاً عادياً: تقوم بتخزين الجزء على القرص الصلب باستخدام StoreChunk.
+## 1. OnMessage(msg ChunkMessage)
 
-إذا كانت الرسالة هي النهاية (IsEOF): 1. تقوم بتجميع كل الأجزاء في ملف واحد عبر AssembleFile. 2. ترسل الملف المكتمل للتحليل عبر ProcessFile. 3. تحذف الأجزاء المؤقتة لتوفير المساحة عبر Cleanup.
+`OnMessage` is the **main entry point** of the server.
 
-2. دالة ValidateMessage(msg ChunkMessage)
-دالة أمنية بسيطة للتأكد من البيانات:
+It receives all incoming messages and controls the full lifecycle.
 
-تتحقق من وجود FileID (معرف الملف).
+### Responsibilities:
+- Validate incoming messages.
+- Store chunks on disk.
+- Detect end-of-file (EOF).
+- Assemble the file.
+- Send the file for analysis.
+- Clean temporary data.
 
-تتأكد أن الرسالة ليست فارغة إلا إذا كانت مجرد إشارة لنهاية الملف (IsEOF).
+### Behavior:
+- If the message is a normal chunk:
+  - The chunk is stored using `StoreChunk`.
+- If the message is an end-of-file signal (`IsEOF`):
+  1. All chunks are assembled using `AssembleFile`.
+  2. The completed file is analyzed using `ProcessFile`.
+  3. Temporary chunks are deleted using `Cleanup`.
 
-3. دالة StoreChunk(msg ChunkMessage)
-مسؤولة عن التخزين المؤقت:
+---
 
-تنشئ مجلداً خاصاً لكل ملف داخل مجلد temp_chunks باستخدام معرف الملف.
+## 2. ValidateMessage(msg ChunkMessage)
 
-تحفظ كل قطعة في ملف مستقل يسمى part_X (حيث X هو رقم القطعة).
+A simple validation and security function.
 
-تستخدم نظام الملفات (القرص) بدلاً من الذاكرة العشوائية لتجنب استهلاك الرام في الملفات الضخمة.
+### What it checks:
+- The `FileID` must not be empty.
+- Chunk data must exist unless the message is an EOF signal.
 
-4. دالة IsFileComplete(fileID string)
-دالة فحص:
+This prevents invalid or corrupted messages from being processed.
 
-تتأكد ما إذا كان هناك أجزاء مخزنة بالفعل للملف المطلوب في المجلد المؤقت.
+---
 
-5. دالة AssembleFile(fileID string)
-هي المسؤولة عن "إعادة البناء":
+## 3. StoreChunk(msg ChunkMessage)
 
-تنشئ ملفاً نهائياً بصيغة .pcap داخل مجلد uploads.
+Handles **temporary storage** of file chunks.
 
-تبحث عن القطع بالترتيب (part_0, part_1, ...) وتدمج محتواها داخل الملف النهائي.
+### What it does:
+- Creates a dedicated directory for each file inside `temp_chunks/`.
+- Saves each chunk as a separate file named `part_X`.
+- Uses disk storage instead of memory to avoid high RAM usage.
 
-تتوقف فور عدم العثور على القطعة التالية في التسلسل.
+This design allows handling very large files safely.
 
-المخرج: تعيد المسار الكامل للملف الذي تم تجميعه.
+---
 
-6. دالة ProcessFile(fileID string, filePath string)
-جسر التواصل مع وحدة التحليل:
+## 4. IsFileComplete(fileID string)
 
-تأخذ مسار الملف المكتمل وترسله إلى حزمة (package) خارجية تسمى analysis لتنفيذ دالة AnalyzePCAP. هنا يتم فحص محتوى ملف الـ PCAP تقنياً.
+A simple check function.
 
-7. دالة Cleanup(fileID string)
-دالة التدبير المنزلي:
+### Purpose:
+- Verifies whether chunks already exist for a given file.
+- Does NOT verify that all chunks are present.
 
-بعد انتهاء التجميع والتحليل، تقوم بحذف المجلد المؤقت الذي يحتوي على القطع الصغيرة (temp_chunks/fileID) لتنظيف السيرفر.
-وصول قطع: StoreChunk تحفظها واحدة تلو الأخرى.
+This function only checks for presence, not completeness.
 
-وصول إشارة النهاية: AssembleFile يجمعها في ملف .pcap واحد.
+---
 
-التحليل: ProcessFile يحلل الملف المكتمل.
+## 5. AssembleFile(fileID string)
 
-التنظيف: Cleanup يمسح القطع التي لم نعد بحاجتها.
+Responsible for **rebuilding the original file**.
+
+### Steps:
+- Creates the final `.pcap` file inside the `uploads/` directory.
+- Reads chunks sequentially (`part_0`, `part_1`, …).
+- Merges chunk data into the final file.
+- Stops when the next chunk in sequence is missing.
+
+### Output:
+- Returns the full path of the assembled file.
+
+---
+
+## 6. ProcessFile(fileID string, filePath string)
+
+Connects the server to the analysis layer.
+
+### What it does:
+- Receives the path of the completed file.
+- Sends it to the `analysis` package.
+- Calls `AnalyzePCAP` to analyze the PCAP file.
+
+The file is processed by path, not loaded into memory.
+
+---
+
+## 7. Cleanup(fileID string)
+
+Handles server housekeeping.
+
+### Purpose:
+- Deletes the temporary directory (`temp_chunks/fileID`).
+- Frees disk space after processing is complete.
+- Prevents disk space leaks.
+
+---
+
+## Summary
+
+- Chunks arrive → `StoreChunk` saves them.
+- EOF arrives → `AssembleFile` rebuilds the file.
+- Analysis runs → `ProcessFile` analyzes the file.
+- Cleanup runs → `Cleanup` removes temporary data.
+
+This design keeps memory usage low, supports large files,
+and cleanly separates responsibilities.
+
+
+
+
+ChunkMessage
+   ↓
+OnMessage
+   ↓
+ValidateMessage
+   ↓
+StoreChunk ──→ AssembleFile ──→ ProcessFile ──→ Cleanup

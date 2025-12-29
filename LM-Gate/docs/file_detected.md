@@ -1,54 +1,115 @@
+# File Detected – Event Driven Architecture Explanation
 
-هذا الملف يحتوي على ثلاثة أجزاء (Packages) تعمل معاً وفق نمط "هندسة البرامج القائمة على الأحداث" (Event-Driven Architecture). وظيفة هذا الكود هي الإبلاغ عن وجود ملف جديد ومعالجته.
+This file contains three packages that work together using an
+**Event-Driven Architecture** pattern.
 
-إليك شرح كيفية عمل "الحدث" (Event) وانتقاله بين الطبقات الثلاث:
+The purpose of this code is to detect a new file and process it
+through multiple layers.
 
-1. طبقة الأحداث (package events)
-هذه الطبقة هي التي تُعرف "شكل" البيانات التي سيتم تداولها.
+Below is a simple explanation of how the **event** is created
+and how it moves between the three layers.
 
-FileDetectedPayload: هو وعاء يحتوي على التفاصيل التقنية للملف مثل المعرف (FileID)، الاسم، الحجم بالبايت، نوع الملف، والـ Checksum (البصمة الرقمية للتأكد من سلامة الملف).
+---
 
-FileDetectedEvent: هو الحدث الرئيسي الذي يغلف البيانات السابقة ويضيف إليها "ختم الوقت" (Timestamp) لمعرفة متى تم اكتشاف الملف.
-هذه الطبقة لا تحتوي على "دوال تنفيذية" بل تحتوي على هياكل بيانات (Structs) لتعريف شكل الحدث:
+## 1. Events Layer (package events)
 
-FileDetectedPayload: هيكل يحتوي على التفاصيل التقنية للملف (ID، الاسم، الحجم، النوع، Checksum).
+This layer defines the **shape of the data** that will be passed
+between the system components.
 
-FileDetectedEvent: الهيكل الرئيسي الذي يجمع البيانات (Payload) مع وقت حدوث العملية (Timestamp).
-2. طبقة المعالج (package handlers)
-هذه الطبقة تعمل كـ "وسيط" أو "موظف استقبال".
+### FileDetectedPayload
+This structure is a container that holds technical file details, such as:
+- FileID
+- File name
+- File size (in bytes)
+- File type
+- Checksum (used to verify file integrity)
 
-عندما يكتشف النظام ملفاً، يتم إرسال الحدث إلى دالة Handle.
+### FileDetectedEvent
+This is the main event structure.
+It wraps the payload and adds a **timestamp** to record
+when the file was detected.
 
-وظيفة المعالج هنا بسيطة جداً: هو لا يحلل البيانات بنفسه، بل يفكك محتوى الحدث (event.Payload) ويمرر البيانات التفصيلية إلى طبقة الخدمات (Services) ليبدأ العمل الحقيقي.
-تحتوي هذه الطبقة على الدوال التي تستقبل الحدث وتوجهه للمكان الصحيح:
+NOTE:  
+This layer does NOT contain executable logic.  
+It only defines data structures (structs).
 
-NewFileDetectedHandler: هي دالة "البناء" (Constructor) التي تجهز المعالج وتربطه بخدمة الملفات.
+Structures in this layer:
+- `FileDetectedPayload` – holds file technical details.
+- `FileDetectedEvent` – combines payload with the detection time.
 
-Handle: هي الدالة الأساسية التي تستقبل الحدث (FileDetectedEvent) وتقوم باستخراج البيانات منه لتمريرها للخدمة.
-3. طبقة الخدمة (package services)
-هنا يتم "العمل الفعلي" والمنطق البرمجي (Business Logic).
+---
 
-دالة OnFileDetected: تستقبل كل التفاصيل (الاسم، الحجم، النوع، إلخ).
+## 2. Handlers Layer (package handlers)
 
-تقوم حالياً بطباعة هذه البيانات بشكل منظم على الشاشة.
+This layer acts as a **middleman** or **dispatcher**.
 
-في الواقع البرمجي، هذا هو المكان الذي تضع فيه كود:
+When the system detects a file, the event is sent to a handler.
 
-تخزين معلومات الملف في قاعدة البيانات.
+The handler does NOT process the data itself.
+Its job is to:
+- Receive the event.
+- Extract the payload data.
+- Forward the data to the service layer.
 
-التأكد من أن الملف ليس مكرراً باستخدام الـ Checksum.
+Functions in this layer:
+- `NewFileDetectedHandler`  
+  Constructor function that creates the handler and connects it to the file service.
 
-نقل الملف إلى مكانه النهائي.
-تحتوي هذه الطبقة على منطق العمل الحقيقي ومعالجة البيانات:
+- `Handle`  
+  The main function that receives a `FileDetectedEvent`,
+  extracts its payload, and passes the data to the service layer.
 
-NewFileService: دالة البناء لإنشاء نسخة جديدة من خدمة الملفات.
+---
 
-OnFileDetected: الدالة المنفذة للعمل، وهي التي تستقبل (ID، الاسم، الحجم، النوع، Checksum) لتقوم بطباعتها أو معالجتها برمجياً (مثل التخزين في قاعدة البيانات أو التحقق من عدم التكرار).
-كيف يعمل الحدث بالترتيب (Workflow):
-الشرارة: النظام يكتشف ملفاً، فيقوم بإنشاء حدث FileDetectedEvent.
+## 3. Services Layer (package services)
 
-التوصيل: يتم إرسال هذا الحدث إلى FileDetectedHandler.
+This is where the **real work (business logic)** happens.
 
-التوجيه: يقوم الـ Handler باستخراج البيانات من الحدث ويمررها إلى FileService.
+### OnFileDetected
+This function receives all file details:
+- File ID
+- Name
+- Size
+- Type
+- Checksum
 
-التنفيذ: تقوم الـ FileService بتنفيذ المهام المطلوبة (مثل الطباعة أو التخزين).
+Currently, it only prints the data in a structured way.
+
+In a real system, this is where you would:
+- Store file information in a database.
+- Check for duplicate files using the checksum.
+- Move the file to its final storage location.
+
+Functions in this layer:
+- `NewFileService`  
+  Constructor function that creates a new file service.
+
+- `OnFileDetected`  
+  The main business logic function that processes the detected file.
+
+---
+
+## Event Workflow (Step by Step)
+
+1. **Trigger**  
+   The system detects a new file and creates a `FileDetectedEvent`.
+
+2. **Dispatch**  
+   The event is sent to `FileDetectedHandler`.
+
+3. **Forwarding**  
+   The handler extracts the payload and forwards the data to `FileService`.
+
+4. **Execution**  
+   The file service executes the required actions
+   (printing, storing, validating, etc.).
+
+---
+
+## Summary
+
+- Events define the data.
+- Handlers route the event.
+- Services execute the business logic.
+- Each layer has a single clear responsibility.
+- This design keeps the system clean, modular, and easy to extend.

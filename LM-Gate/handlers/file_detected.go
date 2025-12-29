@@ -5,24 +5,33 @@ import (
 	"LM-Gate/services"
 )
 
-// FileDetectedHandler يربط event مع service
+// FileDetectedHandler connects file detected events
+// with the service layer.
+//
+// NOTE: This handler acts as a simple bridge.
+// It does not contain business logic.
 type FileDetectedHandler struct {
+	// fileService handles file-related business logic.
 	fileService *services.Manager
 }
 
-// constructor
+// NewFileDetectedHandler creates a new FileDetectedHandler.
+//
+// NOTE: The service manager is injected to keep layers separated.
+// TODO: Add nil validation for the service manager.
 func NewFileDetectedHandler(fs *services.Manager) *FileDetectedHandler {
 	return &FileDetectedHandler{
 		fileService: fs,
 	}
 }
 
-// Handle تُستدعى عند وصول الحدث
-
-// file_detected.go
-
+// Handle is called when a FileDetectedEvent is received.
+//
+// NOTE: This function extracts data from the event payload
+// and forwards it directly to the service layer.
+// FIXME: No validation is done on payload values.
 func (h *FileDetectedHandler) Handle(event events.FileDetectedEvent) {
-	// تمرير كل البيانات الجديدة من الـ Payload إلى الـ Service
+	// Forward all payload data to the service layer
 	h.fileService.OnFileDetected(
 		event.Payload.FileID,
 		event.Payload.FileName,
@@ -31,3 +40,13 @@ func (h *FileDetectedHandler) Handle(event events.FileDetectedEvent) {
 		event.Payload.Checksum,
 	)
 }
+
+/*
+file.detected event
+   ↓
+FileDetectedHandler
+   ↓
+services.Manager.OnFileDetected
+
+
+*/

@@ -9,6 +9,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// ChunkMessage represents a single file chunk message.
+// It is sent from the client to the server.
+//
+// NOTE: The same structure is used on both client and server.
+// TODO: Add checksum or hash field for data integrity.
 type ChunkMessage struct {
 	FileID  string
 	ChunkID int
@@ -18,12 +23,19 @@ type ChunkMessage struct {
 }
 
 var (
+	// chunkStore is used for temporary chunk storage (testing or future use).
+	// NOTE: Currently not used in the upload flow.
 	chunkStore        = make(map[string]map[int][]byte)
 	ErrInvalidMessage = errors.New("invalid message")
 	ErrMissingChunk   = errors.New("missing chunk")
 )
 
-// ======= Clint ==========
+// ================= Client =================
+
+// rootCmd defines the CLI command: LM <file>
+//
+// NOTE: This command uploads a PCAP file using chunk-based upload.
+// TODO: Add flags for chunk size and server address.
 var rootCmd = &cobra.Command{
 	Use:   "LM <file>",
 	Short: "LM - upload PCAP file",
@@ -37,8 +49,12 @@ var rootCmd = &cobra.Command{
 
 		fmt.Println("Uploading:", path)
 
+		// NOTE: MockSender is used for local testing.
+		// FIXME: Replace MockSender with real network sender.
 		sender := &MockSender{}
+
 		chunkSize := int64(5 * 1024 * 1024) // 5MB
+		// TODO: Make chunk size configurable via CLI flag.
 
 		if err := UploadFile(path, chunkSize, sender); err != nil {
 			return err
@@ -50,6 +66,8 @@ var rootCmd = &cobra.Command{
 }
 
 // validatePath ensures the given path exists and points to a file.
+//
+// NOTE: Prevents uploading directories or invalid paths.
 func validatePath(path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -64,6 +82,9 @@ func validatePath(path string) error {
 }
 
 // SplitFile reads a file and streams it as fixed-size byte chunks.
+//
+// NOTE: Uses a goroutine to read the file asynchronously.
+// FIXME: Entire file is later stored in memory in UploadFile.
 func SplitFile(path string, chunkSize int64) (<-chan []byte, <-chan error) {
 	chunks := make(chan []byte)
 	errs := make(chan error, 1)
@@ -101,7 +122,10 @@ func SplitFile(path string, chunkSize int64) (<-chan []byte, <-chan error) {
 	return chunks, errs
 }
 
-// GenerateFileID creates a stable identifier based on file name and size.
+// GenerateFileID creates a stable file identifier.
+//
+// NOTE: Uses file name and file size.
+// TODO: Use hash (SHA256) for stronger uniqueness.
 func GenerateFileID(path string) string {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -110,8 +134,15 @@ func GenerateFileID(path string) string {
 	return fmt.Sprintf("%s-%d", info.Name(), info.Size())
 }
 
+// MockSender is a test sender used for local testing.
+//
+// NOTE: This does NOT send data over network.
 type MockSender struct{}
 
+// Send simulates sending a chunk message.
+//
+// NOTE: Prints message details to stdout.
+// FIXME: No real transmission or error handling.
 func (m *MockSender) Send(msg ChunkMessage) error {
 	if msg.IsEOF {
 		fmt.Println("[SEND] EOF for file:", msg.FileID)
@@ -128,11 +159,21 @@ func (m *MockSender) Send(msg ChunkMessage) error {
 	return nil
 }
 
+// Sender defines the interface for sending chunk messages.
+//
+// NOTE: Allows swapping MockSender with real sender (RabbitMQ, HTTP, etc.).
 type Sender interface {
 	Send(msg ChunkMessage) error
 }
 
-// UploadFile orchestrates file upload by sending all chunks then EOF.
+// UploadFile orchestrates the full upload process.
+//
+// Steps:
+// 1. Split file into chunks.
+// 2. Send each chunk.
+// 3. Send EOF message.
+//
+// FIXME: All chunks are loaded into memory before sending.
 func UploadFile(path string, chunkSize int64, sender Sender) error {
 	if sender == nil {
 		return errors.New("sender is nil")
@@ -166,7 +207,9 @@ func UploadFile(path string, chunkSize int64, sender Sender) error {
 	return SendEOF(fileID, sender)
 }
 
-// BuildChunkMessage builds a chunk message for a single file piece.
+// BuildChunkMessage builds a chunk message for one file piece.
+//
+// NOTE: IsEOF is always false here.
 func BuildChunkMessage(fileID string, chunkID int, total int, data []byte) ChunkMessage {
 	return ChunkMessage{
 		FileID:  fileID,
@@ -177,7 +220,9 @@ func BuildChunkMessage(fileID string, chunkID int, total int, data []byte) Chunk
 	}
 }
 
-// SendEOF notifies the receiver that all chunks have been sent.
+// SendEOF sends the end-of-file signal to the receiver.
+//
+// NOTE: Indicates that all chunks were sent.
 func SendEOF(fileID string, sender Sender) error {
 	msg := ChunkMessage{
 		FileID: fileID,
@@ -186,9 +231,12 @@ func SendEOF(fileID string, sender Sender) error {
 	return sender.Send(msg)
 }
 
+// resetChunkStore clears the temporary chunk storage.
+//
+// NOTE: Currently unused.
 func resetChunkStore() {
 	chunkStore = make(map[string]map[int][]byte)
 }
 
-// تحسين مهم لازم اسوي دالة تاكد انه ترتيب وصل صح يعني من 0 الى رقم
-// اسوي دالة تحقق من حجم ملف صح
+// TODO: Add function to validate chunk order (0 → total-1).
+// TODO: Add function to verify final file size after upload.

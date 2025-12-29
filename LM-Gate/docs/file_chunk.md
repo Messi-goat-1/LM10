@@ -1,46 +1,120 @@
-1. طبقة الأحداث (package events)
-هنا يتم تعريف "الرسالة" التي يتم تداولها عبر النظام (مثل RabbitMQ):
+# File Chunk Processing – Layered Architecture Explanation
 
-FileChunkPayload: تحتوي على البيانات الخام للقطعة (Data)، ومعرف الملف الأصلي (FileID)، وترتيب هذه القطعة (ChunkIndex)، والعدد الكلي للقطع المتوقعة (TotalChunks).
+This document explains how file chunks are handled
+across the system layers.
 
-FileChunkEvent: هو الغلاف الخارجي للرسالة ويحتوي على البيانات (Payload) وتوقيت الإرسال (Timestamp).
+---
 
-2. طبقة المعالج (package handlers)
-هذه الطبقة تعمل كجسر استلام فقط:
+## 1. Events Layer (package events)
 
-NewFileChunkHandler: دالة تجهيز المعالج وربطه بمدير الخدمات.
+This layer defines the **message format**
+that is exchanged across the system (for example via RabbitMQ).
 
-Handle: بمجرد وصول قطعة ملف، تقوم هذه الدالة باستلام الحدث وتفكيكه، ثم تمرير كل معلومة (ID، ترتيب، إجمالي، بيانات) إلى طبقة الخدمات فوراً.
+### FileChunkPayload
+Contains the raw chunk data and metadata:
+- `Data`  
+  The raw bytes of the chunk.
+- `FileID`  
+  The original file identifier.
+- `ChunkIndex`  
+  The order of this chunk.
+- `TotalChunks`  
+  Total number of expected chunks.
 
-3. طبقة الخدمة (package services)
-هنا يقع "العقل المدبر" للنظام وتتم العمليات الثقيلة:
+### FileChunkEvent
+This is the outer wrapper of the message.
+It contains:
+- The payload (`FileChunkPayload`)
+- A `Timestamp` indicating when the chunk was sent.
 
-NewManager: دالة البناء التي تحدد مسار المجلد المؤقت (temp_chunks) ومجلد التخزين النهائي (uploads).
+NOTE:  
+This layer defines data only, not logic.
 
-OnChunkReceived:
+---
 
-تستقبل القطعة وتنشئ مجلداً خاصاً بالملف إذا لم يكن موجوداً.
+## 2. Handlers Layer (package handlers)
 
-تكتب محتوى القطعة في ملف مستقل على القرص بصيغة part_X.
+This layer works as a **receiving bridge only**.
 
-تتحقق عبر دالة isComplete هل وصل عدد القطع للعدد الكلي المطلوب؟
+### NewFileChunkHandler
+- Prepares the handler.
+- Connects it to the service manager.
 
-إذا اكتملت القطع، تشغل عملية التجميع (reassemble) في الخلفية.
+### Handle
+- Triggered when a file chunk arrives.
+- Receives the event.
+- Extracts all data from the event:
+  - File ID
+  - Chunk order
+  - Total chunks
+  - Raw data
+- Immediately forwards the data to the services layer.
 
-isComplete: دالة فحص تقارن عدد الملفات الموجودة في المجلد المؤقت مع العدد الإجمالي المتوقع.
+NOTE:  
+Handlers do not perform processing logic.
+They only route data.
 
-reassemble:
+---
 
-تفتح ملفاً جديداً في مجلد التخزين النهائي.
+## 3. Services Layer (package services)
 
-تدمج جميع القطع بالترتيب الصحيح (0، 1، 2...) داخل الملف النهائي.
+This layer is the **core logic** of the system
+and handles heavy operations.
 
-تقوم بمسح المجلد المؤقت (Cleanup) لتوفير المساحة.
+### NewManager
+- Constructor function.
+- Defines:
+  - Temporary directory path (`temp_chunks`)
+  - Final storage directory path (`uploads`)
 
-ملخص الدوال في كل طبقة:
-الطبقة	اسم الدالة	الوظيفة الأساسية
-Events	FileChunkEvent	تعريف هيكل البيانات للقطعة
-Handlers	Handle	استلام الحدث وتوجيهه للخدمة
-Services	OnChunkReceived	حفظ القطعة على القرص والتحقق من الاكتمال
-Services	isComplete	التأكد من وصول جميع القطع
-Services	reassemble	دمج القطع في ملف واحد وتنظيف المؤقت
+---
+
+### OnChunkReceived
+
+When a chunk is received:
+- Creates a file-specific temporary directory if it does not exist.
+- Writes the chunk data to a separate file on disk:
+  - `part_0`, `part_1`, etc.
+- Calls `isComplete` to check if all chunks have arrived.
+
+If all chunks are received:
+- Starts the reassembly process (`reassemble`) in the background.
+
+---
+
+### isComplete
+- Compares the number of chunk files stored in the temp directory
+  with the expected `TotalChunks`.
+- Returns true when all chunks are present.
+
+---
+
+### reassemble
+
+When the file is complete:
+- Opens a new output file in the final storage directory.
+- Merges all chunk files in the correct order:
+  - `0, 1, 2, ...`
+- Deletes the temporary directory (cleanup) to free disk space.
+
+---
+
+## Function Summary by Layer
+
+| Layer     | Function Name      | Main Responsibility |
+|----------|-------------------|---------------------|
+| Events   | FileChunkEvent     | Define chunk data structure |
+| Handlers | Handle              | Receive event and route data |
+| Services | OnChunkReceived     | Store chunk and check completion |
+| Services | isComplete          | Verify all chunks arrived |
+| Services | reassemble          | Merge chunks and cleanup |
+
+---
+
+## Summary
+
+- Events define the message format.
+- Handlers receive and forward events.
+- Services store chunks, verify completeness, and merge files.
+- Temporary data is cleaned after successful assembly.
+- The design follows clear separation of responsibilities.

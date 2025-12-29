@@ -7,36 +7,45 @@ import (
 	"path/filepath"
 )
 
-// OnMessage is the server entry point for handling incoming chunk messages.
+// OnMessage is the main server entry point.
+// It receives chunk messages and decides what to do.
+//
+// NOTE: This function acts as the orchestrator for the whole flow.
+// TODO: Add structured logging for each step.
 func OnMessage(msg ChunkMessage) error {
 	if err := ValidateMessage(msg); err != nil {
 		return err
 	}
 
-	// إذا كانت الرسالة هي علامة النهاية
+	// If this message is the end-of-file marker
 	if msg.IsEOF {
-		// 1. تجميع الملف والحصول على مساره المادي
+		// NOTE: EOF means all chunks were already sent.
+
+		// 1. Assemble the file and get its final path
 		filePath, err := AssembleFile(msg.FileID)
 		if err != nil {
 			return fmt.Errorf("failed to assemble file: %v", err)
 		}
 
-		// 2. البدء في معالجة الملف (التحليل)
+		// 2. Start processing the file (analysis step)
+		// TODO: Run this step asynchronously if file size is large.
 		if err := ProcessFile(msg.FileID, filePath); err != nil {
 			return err
 		}
 
-		// 3. تنظيف القطع المؤقتة بعد التجميع (يتم تنفيذها هنا فقط)
+		// 3. Clean temporary chunks after processing
 		Cleanup(msg.FileID)
 		return nil
 	}
 
-	// إذا كانت قطعة عادية، يتم تخزينها على القرص
+	// If this is a normal chunk, store it on disk
 	return StoreChunk(msg)
 }
 
-// تأكد أن هذا هو القوس الوحيد في النهاية
 // ValidateMessage performs basic validation on incoming messages.
+//
+// NOTE: This prevents invalid or corrupted messages from being processed.
+// TODO: Add validation for ChunkID range.
 func ValidateMessage(msg ChunkMessage) error {
 	if msg.FileID == "" {
 		return ErrInvalidMessage
@@ -49,8 +58,11 @@ func ValidateMessage(msg ChunkMessage) error {
 	return nil
 }
 
-// StoreChunk temporarily stores a file chunk in memory.
-// StoreChunk - التعديل الجديد لحفظ البيانات على القرص بدلاً من الذاكرة
+// StoreChunk saves a file chunk to disk.
+//
+// NOTE: Chunks are stored on disk to avoid high memory usage.
+// TODO: Add checksum validation per chunk.
+// FIXME: No limit on disk usage is enforced.
 func StoreChunk(msg ChunkMessage) error {
 	tempDir := fmt.Sprintf("temp_chunks/%s", msg.FileID)
 
@@ -63,7 +75,10 @@ func StoreChunk(msg ChunkMessage) error {
 	return os.WriteFile(chunkPath, msg.Data, 0644)
 }
 
-// IsFileComplete checks whether all chunks for a file are present.
+// IsFileComplete checks if there are stored chunks for a file.
+//
+// NOTE: This only checks if chunks exist, not if all chunks arrived.
+// FIXME: This does not verify the expected number of chunks.
 func IsFileComplete(fileID string) bool {
 	tempDir := fmt.Sprintf("temp_chunks/%s", fileID)
 	files, err := os.ReadDir(tempDir)
@@ -74,7 +89,11 @@ func IsFileComplete(fileID string) bool {
 	return len(files) > 0
 }
 
-// AssembleFile reconstructs the original file from stored chunks.
+// AssembleFile rebuilds the original file from stored chunks.
+//
+// NOTE: Chunks are read sequentially: part_0, part_1, ...
+// FIXME: If a chunk is missing, the loop stops silently.
+// TODO: Detect missing chunks and return an error.
 func AssembleFile(fileID string) (string, error) {
 	tempDir := filepath.Join("temp_chunks", fileID)
 	finalDir := "uploads"
@@ -88,12 +107,12 @@ func AssembleFile(fileID string) (string, error) {
 	}
 	defer out.Close()
 
-	// دمج القطع بترتيب متسلسل
+	// Merge chunks in order
 	for i := 0; ; i++ {
 		chunkPath := filepath.Join(tempDir, fmt.Sprintf("part_%d", i))
 		data, err := os.ReadFile(chunkPath)
 		if err != nil {
-			break // توقف عند عدم العثور على القطعة التالية
+			break // Stop when the next chunk is missing
 		}
 		out.Write(data)
 	}
@@ -101,22 +120,30 @@ func AssembleFile(fileID string) (string, error) {
 	return finalPath, nil
 }
 
-// ProcessFile handles the fully assembled file (analysis, parsing, etc).
-// تعديل لاستقبال مسار الملف (string) بدلاً من []byte
-// في ملف server.go
-// داخل server.go
+// ProcessFile handles the fully assembled file.
+//
+// NOTE: The file is passed by path, not loaded into memory.
+// TODO: Add timeout or context support.
 func ProcessFile(fileID string, filePath string) error {
 	return analysis.AnalyzePCAP(fileID, filePath)
 }
 
-// Cleanup removes all stored data related to a file.
+// Cleanup removes all temporary data related to a file.
+//
+// NOTE: This helps prevent disk space leaks.
+// TODO: Add retry or safety checks before deletion.
 func Cleanup(fileID string) {
-	os.RemoveAll(filepath.Join("temp_chunks", fileID)) // حذف المجلد من القرص
+	os.RemoveAll(filepath.Join("temp_chunks", fileID))
 }
 
-// ---------------
+// FakeSender is a helper for testing.
+//
+// NOTE: Used to simulate message sending without network or MQ.
 type FakeSender struct{}
 
+// Send forwards the message directly to OnMessage.
+//
+// TODO: Add test assertions around Send behavior.
 func (f *FakeSender) Send(msg ChunkMessage) error {
 	return OnMessage(msg)
 }

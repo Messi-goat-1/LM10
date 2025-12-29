@@ -4,23 +4,30 @@ import (
 	"time"
 )
 
-// Event يمثل أي حدث داخل النظام
+// Event represents a generic event inside the system.
+//
+// NOTE: This is a base event structure used across the platform.
+// It follows an Event-Driven Architecture style.
+// TODO: Enforce strong typing for Payload instead of using `any`.
+// FIXME: No validation exists for Event name or Version.
 type Event struct {
-	Event      string    `json:"event"`
-	Version    int       `json:"version"`
+	// Event is the name/type of the event (e.g. "file.detected", "chunk.received")
+	Event string `json:"event"`
+
+	// Version represents the schema version of the event.
+	// NOTE: Useful for backward compatibility.
+	Version int `json:"version"`
+
+	// OccurredAt records when the event happened.
+	// NOTE: Should always be set when the event is created.
 	OccurredAt time.Time `json:"occurred_at"`
-	Source     string    `json:"source"`
-	Payload    any       `json:"payload"`
-}
 
-/*
-func DispatchEvent(eventType string, payload []byte) error {
-	switch eventType {
-	case "file_detected":
-		return handlers.HandleFileDetected(payload)
+	// Source indicates where the event was produced from
+	// (e.g. "client", "server", "scanner").
+	Source string `json:"source"`
 
-	default:
-		return fmt.Errorf("unknown event type: %s", eventType)
-	}
+	// Payload contains event-specific data.
+	// NOTE: Payload structure depends on the event type.
+	// FIXME: Using `any` removes compile-time safety.
+	Payload any `json:"payload"`
 }
-*/

@@ -1,42 +1,108 @@
+# PCAP Uploaded – Event Workflow Explanation
 
-إليك شرح مفصل لكيفية عمل هذا الحدث عبر الطبقات المختلفة:
+This document explains how the **PCAP upload event**
+works across different layers of the system.
 
-1. طبقة الأحداث (package events)
-هذه الطبقة تحدد "شكل" البيانات التي تنتقل عبر النظام.
+---
 
-FileChunkPayload: يحتوي على المعلومات الأساسية للقطعة، وهي: معرف الملف الأصلي (FileID)، رقم ترتيب القطعة (ChunkIndex)، إجمالي عدد القطع المتوقعة لضمان عدم فقدان أي جزء (TotalChunks)، والبيانات الخام للقطعة نفسها (Data).
+## 1. Events Layer (package events)
 
-FileChunkEvent: يغلف البيانات السابقة ويضيف إليها طابعاً زمنياً (Timestamp) لتوثيق وقت وصولها.
+This layer defines the **shape of the data**
+that moves through the system.
 
-2. طبقة المعالج (package handlers)
-تعمل هذه الطبقة كمستقبل للحدث (غالباً من وسيط رسائل مثل RabbitMQ كما هو موضح في rabbit.go).
+### FileChunkPayload
+Contains the basic information of a file chunk:
+- `FileID`  
+  The original file identifier.
+- `ChunkIndex`  
+  The order index of the chunk.
+- `TotalChunks`  
+  Total number of expected chunks (used to ensure no chunk is missing).
+- `Data`  
+  Raw chunk data.
 
-دالة Handle: وظيفتها هي استلام الحدث فور وصوله وتفكيك محتوياته. هي لا تقوم بأي معالجة منطقية، بل تكتفي بتمرير البيانات المستخرجة إلى طبقة الخدمات (Services) لتبدأ المعالجة الفعلية.
+### FileChunkEvent
+Wraps the payload and adds a `Timestamp`
+to record when the chunk arrived.
 
-3. طبقة الخدمة (package services)
-هنا يتم تنفيذ المنطق البرمجي والتعامل مع الملفات على القرص الصلب.
+---
 
-دالة OnChunkReceived:
+## 2. Handlers Layer (package handlers)
 
-عند استلام قطعة، تقوم بإنشاء مجلد مؤقت خاص بهذا الملف (FileID) إذا لم يكن موجوداً.
+This layer acts as the **event receiver**.
 
-تقوم بحفظ محتوى القطعة في ملف مستقل يحمل رقمها (مثل part_0, part_1) داخل المجلد المؤقت.
+Usually, the event arrives from a message broker
+such as RabbitMQ (as shown in `rabbit.go`).
 
-تستدعي دالة الفحص لترى هل اكتمل النصاب.
+### Handle Function
+- Receives the event as soon as it arrives.
+- Extracts the payload data.
+- Does NOT apply business logic.
+- Forwards the extracted data to the services layer.
 
-دالة isComplete: تقارن عدد الملفات (القطع) الموجودة حالياً في المجلد المؤقت مع العدد الإجمالي المطلوب (TotalChunks).
+NOTE:  
+Handlers are responsible only for routing, not processing.
 
-دالة reassemble: بمجرد تحقق الاكتمال، تبدأ هذه الدالة بفتح ملف نهائي ودمج محتويات القطع بالترتيب التسلسلي الصحيح. بعد النجاح، تقوم بتنظيف المجلد المؤقت وحذف القطع لتوفير المساحة.
+---
 
-ملخص تدفق الحدث (Workflow):
-الاستلام: يتم استقبال FileChunkEvent عبر rabbit.go.
+## 3. Services Layer (package services)
 
-التوجيه: يقوم الـ Handler بتمرير البيانات لمدير الخدمات.
+This is where the **actual logic and file handling** happens.
 
-التخزين: تقوم الخدمة بوضع القطعة في temp_chunks/FileID/part_X.
+### OnChunkReceived Function
 
-الاكتمال: إذا كان عدد القطع في المجلد يساوي TotalChunks:
+When a chunk is received:
+- Creates a temporary directory for the file (`FileID`) if it does not exist.
+- Saves the chunk data into a separate file:
+  - `part_0`, `part_1`, etc.
+- Calls a check function to see if all chunks are received.
 
-يتم دمجهم في ملف واحد في مجلد uploads.
+---
 
-يتم استدعاء Cleanup لمسح القطع المؤقتة.
+### isComplete Function
+
+- Compares the number of stored chunk files
+  with the expected `TotalChunks`.
+- Returns true when all chunks are present.
+
+---
+
+### reassemble Function
+
+When the file is complete:
+- Opens a final output file.
+- Merges all chunk files in correct order.
+- Saves the final file in the `uploads` directory.
+- Cleans up the temporary directory by deleting all chunk files.
+
+NOTE:  
+This step ensures correct order and data integrity.
+
+---
+
+## Event Workflow Summary
+
+1. **Receive**  
+   `FileChunkEvent` is received through `rabbit.go`.
+
+2. **Route**  
+   The handler forwards the data to the service layer.
+
+3. **Store**  
+   The service saves the chunk to  
+   `temp_chunks/FileID/part_X`.
+
+4. **Complete Check**  
+   If the number of chunks equals `TotalChunks`:
+   - All chunks are merged into one file in `uploads/`.
+   - Temporary chunk files are removed using cleanup.
+
+---
+
+## Summary
+
+- Events describe incoming chunk data.
+- Handlers route the events.
+- Services store, verify, and merge chunks.
+- Temporary data is cleaned after completion.
+- The system ensures correct order and full file reconstruction.

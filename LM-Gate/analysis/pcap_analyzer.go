@@ -7,26 +7,35 @@ import (
 	"github.com/google/gopacket/pcap"
 )
 
-// 1. دالة الفتح: وظيفتها فقط "الإمساك" بالملف من القرص
+// GetFileHandle opens a PCAP file from disk (offline mode).
+//
+// NOTE: This function is purely technical.
+// It only opens the file and prepares it for reading.
+// TODO: Add file existence and permission checks before opening.
 func GetFileHandle(filePath string) (*pcap.Handle, error) {
 	handle, err := pcap.OpenOffline(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("فشل الوصول للملف: %v", err)
+		return nil, fmt.Errorf("failed to open file: %v", err)
 	}
 	return handle, nil
 }
 
-// 2. دالة التحليل: وظيفتها استخراج المعلومات (كل شيء)
+// RunFullAnalysis performs the actual packet analysis.
+//
+// NOTE: This function is the analysis engine.
+// It reads packets one by one from the PCAP file.
+// FIXME: Currently stops after a small number of packets.
+// TODO: Analyze all packets and extract structured data.
 func RunFullAnalysis(handle *pcap.Handle) {
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 
-	// سنختبر أول 5 حزم فقط لنرى الهيكل
+	// Test only the first few packets to inspect the structure
 	count := 0
 	for packet := range packetSource.Packets() {
 		count++
 		fmt.Printf("\n--- Packet #%d ---\n", count)
 
-		// هذا السطر سيطبع لك كل تفاصيل الحزمة (IPs, Ports, Payload)
+		// This prints all packet details (IPs, Ports, Payload, etc.)
 		fmt.Println(packet.String())
 
 		if count >= 2 {
@@ -35,16 +44,20 @@ func RunFullAnalysis(handle *pcap.Handle) {
 	}
 }
 
-// 3. الدالة التي يناديها server.go للربط بينهما
+// AnalyzePCAP is the main function called by server.go.
+//
+// NOTE: This function connects file handling with analysis logic.
+// It opens the file first, then runs the full analysis.
+// TODO: Pass context for cancellation or timeouts.
 func AnalyzePCAP(fileID string, filePath string) error {
-	// تنفيذ الوظيفة الأولى
+	// Step 1: Open the PCAP file
 	handle, err := GetFileHandle(filePath)
 	if err != nil {
 		return err
 	}
 	defer handle.Close()
 
-	// تنفيذ الوظيفة الثانية
+	// Step 2: Run packet analysis
 	RunFullAnalysis(handle)
 
 	return nil

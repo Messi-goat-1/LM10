@@ -1,55 +1,105 @@
+# Workflow Summary – rabbit.go
 
-ملخص سير العمل
-:rebbit.go
-1. الهيكل RabbitClient
-هذا الهيكل يمثل "العميل" الذي سيتعامل مع RabbitMQ.
+This document explains how `rabbit.go` works and how RabbitMQ
+is used for sending and receiving messages.
 
-conn: يمثل الاتصال الفعلي (TCP Connection) مع الخادم.
+---
 
-channel: القناة التي يتم عبرها إرسال واستقبال البيانات (القنوات أخف من الاتصالات الكاملة).
+## 1. RabbitClient Structure
 
-2. دالة NewRabbitClient
-هذه هي دالة الإنشاء (Constructor):
+`RabbitClient` represents the client that communicates with RabbitMQ.
 
-تأخذ عنوان السيرفر (url) وتقوم بفتح اتصال.
+### Fields:
+- `conn`  
+  Represents the actual TCP connection to the RabbitMQ server.
 
-تفتح قناة اتصال داخل هذا الرابط.
+- `channel`  
+  The channel used to send and receive messages.  
+  Channels are lighter and cheaper than full connections.
 
-تعيد كائن RabbitClient جاهز للاستخدام.
+---
 
-3. دالة Close
-دالة التنظيف:
+## 2. NewRabbitClient Function
 
-تضمن إغلاق القناة والاتصال بشكل آمن عند انتهاء الحاجة للسيرفر، لمنع تسريب الموارد (Memory/Connection leaks).
+This is the constructor function.
 
-4. دالة PublishMessage
-مهمتها "إرسال" الرسائل:
+### What it does:
+- Takes the RabbitMQ server URL.
+- Opens a connection to the server.
+- Opens a channel on that connection.
+- Returns a ready-to-use `RabbitClient` instance.
 
-تتأكد أولاً من وجود الطابور (QueueDeclare)؛ فإذا لم يكن موجوداً تقوم بإنشائه.
+---
 
-ترسل الرسالة النصية إلى الطابور المحدد باستخدام PublishWithContext.
+## 3. Close Function
 
-5. دالة RunHeartbeat
-دالة مراقبة (نبضات القلب):
+Cleanup function.
 
-تعمل بشكل آلي كل دقيقة واحدة (1 * time.Minute).
+### Purpose:
+- Safely closes the channel and the connection.
+- Prevents resource leaks (memory or open connections).
+- Should be called when the server shuts down.
 
-ترسل رسالة نصية لطابور يسمى server_status تخبر فيه النظام أن "السيرفر لا يزال يعمل" مع ذكر الوقت.
+---
 
-تفيد هذه الدالة في مراقبة حالة السيرفر عن بُعد.
+## 4. PublishMessage Function
 
-6. دالة ConsumeMessages
-مهمتها "استقبال" الرسائل:
+Responsible for **sending messages**.
 
-تفتح باب الاستماع على طابور معين (queueName).
+### Steps:
+- Ensures the queue exists using `QueueDeclare`.
+- Creates the queue if it does not exist.
+- Sends a text message to the specified queue using `PublishWithContext`.
 
-تستخدم "Goroutine" (دالة تعمل في الخلفية) لكي لا يتوقف البرنامج أثناء انتظار الرسائل.
+---
 
-عند وصول أي رسالة، تقوم بتمرير محتواها (d.Body) إلى دالة معالجة (processor) تقوم أنت بتعريفها لاحقاً.
-الاتصال: ننشئ العميل بـ NewRabbitClient.
+## 5. RunHeartbeat Function
 
-الإرسال: نستخدم PublishMessage لإرسال بيانات.
+Heartbeat (monitoring) function.
 
-المراقبة: RunHeartbeat تعمل في الخلفية لتأكيد أن السيرفر متصل.
+### How it works:
+- Runs automatically every 1 minute.
+- Sends a message to a queue called `server_status`.
+- The message indicates that the server is still running and includes the current time.
 
-الاستقبال: ConsumeMessages تنتظر أي رسائل قادمة من أنظمة أخرى لتعالجها.
+### Why it is useful:
+- Helps monitor server health remotely.
+- Confirms that the server connection is alive.
+
+---
+
+## 6. ConsumeMessages Function
+
+Responsible for **receiving messages**.
+
+### What it does:
+- Starts listening to a specific queue (`queueName`).
+- Uses a goroutine so the program does not block while waiting for messages.
+- When a message arrives, its raw data (`d.Body`) is passed to a processing function (`processor`).
+
+The processing logic is defined by the user of this function.
+
+---
+
+## Overall Flow
+
+- **Connection**:  
+  Create the client using `NewRabbitClient`.
+
+- **Sending**:  
+  Use `PublishMessage` to send data.
+
+- **Monitoring**:  
+  `RunHeartbeat` runs in the background to confirm the server is alive.
+
+- **Receiving**:  
+  `ConsumeMessages` listens for incoming messages from other systems.
+
+---
+
+## Summary
+
+This design keeps messaging logic simple and clean:
+- One client manages the connection and channel.
+- Sending and receiving are clearly separated.
+- Background tasks (heartbeat, consuming) do not block the main application.
