@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"LM-Gate/events"
 	"LM-Gate/services"
-	"encoding/json"
 )
 
 // FileDetectedHandler connects file detected events
@@ -33,11 +31,6 @@ func NewFileDetectedHandler(fs *services.Manager) *FileDetectedHandler {
 // FIXME: No validation is done on payload values.
 // Forward all payload data to the service layer
 func (h *FileDetectedHandler) Handle(data []byte) error {
-	var event events.FileDetectedEvent
-
-	if err := json.Unmarshal(data, &event); err != nil {
-		return err
-	}
 
 	h.fileService.OnFileDetected(
 		event.Payload.FileID,
@@ -46,8 +39,6 @@ func (h *FileDetectedHandler) Handle(data []byte) error {
 		event.Payload.FileType,
 		event.Payload.Checksum,
 	)
-
-	return nil
 }
 
 /*
