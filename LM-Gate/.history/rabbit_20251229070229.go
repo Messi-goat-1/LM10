@@ -51,15 +51,14 @@ func (r *RabbitClient) Close() {
 }
 
 // PublishMessage sends a text message to a specific queue.
-// PublishMessage sends a text message to a specific queue.
 //
 // NOTE: The queue is created if it does not already exist.
-// Now updated to use durable = true to match ConsumeMessages.
+// TODO: Support JSON messages and message headers.
+// FIXME: Messages are not persistent (durable = false).
 func (r *RabbitClient) PublishMessage(queueName string, message string) error {
-	// 1. التأكد من وجود الطابور بنفس إعدادات المستهلك (Durable: true)
 	_, err := r.channel.QueueDeclare(
 		queueName,
-		true,  // durable: يجب أن تكون true لتتطابق مع دالة الاستقبال
+		false, // durable
 		false, // auto-delete
 		false, // exclusive
 		false, // no-wait
@@ -69,7 +68,6 @@ func (r *RabbitClient) PublishMessage(queueName string, message string) error {
 		return err
 	}
 
-	// 2. إرسال الرسالة إلى الطابور
 	return r.channel.PublishWithContext(
 		context.Background(),
 		"",        // exchange
@@ -79,8 +77,6 @@ func (r *RabbitClient) PublishMessage(queueName string, message string) error {
 		amqp.Publishing{
 			ContentType: "text/plain",
 			Body:        []byte(message),
-			// نصيحة إضافية: تجعل الرسالة نفسها محفوظة على القرص
-			DeliveryMode: amqp.Persistent,
 		},
 	)
 }
@@ -111,31 +107,17 @@ func RunHeartbeat(rabbit *RabbitClient) {
 // ConsumeMessages listens to messages from a specific queue
 // and passes the received data to a processor function.
 //
-// NOTE: Now it ensures the queue exists before consuming (Durable = true).
+// NOTE: The processor function handles raw message bytes.
+// TODO: Add message acknowledgment control (manual ack).
+// FIXME: Errors during processing are not handled.
 func (r *RabbitClient) ConsumeMessages(
 	queueName string,
 	processor func([]byte),
 ) {
-	// 1. التأكد من وجود الطابور وتفعيل خاصية البقاء (Durable: true)
-	// هذا يمنع خطأ "queue not found" ويحمي الطابور من الحذف عند رسترت الأرنب
-	_, err := r.channel.QueueDeclare(
-		queueName,
-		true,  // durable: الطابور يبقى محفوظاً في القرص
-		false, // auto-delete
-		false, // exclusive
-		false, // no-wait
-		nil,
-	)
-	if err != nil {
-		log.Printf("Failed to declare queue: %v", err)
-		return
-	}
-
-	// 2. البدء باستهلاك الرسائل من الطابور
 	msgs, err := r.channel.Consume(
 		queueName,
 		"",    // consumer tag
-		true,  // auto-ack: تمكين التأكيد التلقائي لاستلام الرسالة
+		true,  // auto-ack
 		false, // exclusive
 		false, // no-local
 		false, // no-wait
@@ -146,11 +128,9 @@ func (r *RabbitClient) ConsumeMessages(
 		return
 	}
 
-	// 3. تشغيل مستمع الرسائل في خلفية البرنامج (Goroutine)
 	go func() {
-		log.Printf("Successfully started consuming from: %s", queueName)
 		for d := range msgs {
-			// تمرير بيانات الرسالة الخام إلى دالة المعالجة
+			// Pass raw message data to the processor
 			processor(d.Body)
 		}
 	}()

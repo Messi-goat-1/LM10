@@ -71,11 +71,20 @@ func main() {
 	// ==================================================
 	dispatcher := handlers.NewEventDispatcher()
 
-	dispatcher.RegisterHandler("file.detected", handlers.NewFileDetectedHandler(manager))
+	dispatcher.RegisterHandler(
+		"file.detected",
+		handlers.NewFileDetectedHandler(manager),
+	)
 
-	dispatcher.RegisterHandler("file.chunk", handlers.NewFileChunkHandler(manager))
+	dispatcher.RegisterHandler(
+		"file.chunk",
+		handlers.NewFileChunkHandler(manager),
+	)
 
-	dispatcher.RegisterHandler("pcap.analyze", handlers.NewPCAPAnalyzeHandler(pcapService))
+	dispatcher.RegisterHandler(
+		"pcap.analyze",
+		handlers.NewPCAPAnalyzeHandler(pcapService),
+	)
 	// ==================================================
 
 	// ==================================================

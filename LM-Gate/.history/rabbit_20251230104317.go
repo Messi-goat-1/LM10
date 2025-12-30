@@ -51,15 +51,14 @@ func (r *RabbitClient) Close() {
 }
 
 // PublishMessage sends a text message to a specific queue.
-// PublishMessage sends a text message to a specific queue.
 //
 // NOTE: The queue is created if it does not already exist.
-// Now updated to use durable = true to match ConsumeMessages.
+// TODO: Support JSON messages and message headers.
+// FIXME: Messages are not persistent (durable = false).
 func (r *RabbitClient) PublishMessage(queueName string, message string) error {
-	// 1. التأكد من وجود الطابور بنفس إعدادات المستهلك (Durable: true)
 	_, err := r.channel.QueueDeclare(
 		queueName,
-		true,  // durable: يجب أن تكون true لتتطابق مع دالة الاستقبال
+		false, // durable
 		false, // auto-delete
 		false, // exclusive
 		false, // no-wait
@@ -69,7 +68,6 @@ func (r *RabbitClient) PublishMessage(queueName string, message string) error {
 		return err
 	}
 
-	// 2. إرسال الرسالة إلى الطابور
 	return r.channel.PublishWithContext(
 		context.Background(),
 		"",        // exchange
@@ -79,8 +77,6 @@ func (r *RabbitClient) PublishMessage(queueName string, message string) error {
 		amqp.Publishing{
 			ContentType: "text/plain",
 			Body:        []byte(message),
-			// نصيحة إضافية: تجعل الرسالة نفسها محفوظة على القرص
-			DeliveryMode: amqp.Persistent,
 		},
 	)
 }

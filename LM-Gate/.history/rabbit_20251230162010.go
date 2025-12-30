@@ -155,3 +155,28 @@ func (r *RabbitClient) ConsumeMessages(
 		}
 	}()
 }
+
+// عند استلام رسالة ChunkMessage من RabbitMQ:
+func processMessage(msg ChunkMessage) {
+	// أ. خزن القطعة في Redis فوراً
+	redisService.StoreChunk(msg.FileID, msg.Data)
+
+	// ب. إذا كان الملف اكتمل (EOF)
+	if msg.IsEOF {
+		// 1. اسحب الملف كاملاً من Redis
+		fileData, _ := redisService.GetFullFile(msg.FileID)
+
+		// 2. ابدأ التحليل (هنا تضع كود تحليل الـ PCAP واستخراج الـ IPs)
+		foundIPs := extractIPs(fileData)
+
+		// 3. صنف النتائج في Redis
+		for _, ip := range foundIPs {
+			redisService.GroupByIP(ip, "Detected suspicious activity")
+		}
+
+		// 4. الآن انقل المجموعات من Redis إلى MongoDB (سنتناول هذا لاحقاً)
+
+		// 5. امسح ملف الـ Chunks من Redis لتوفير مساحة
+		redisService.ClearFile(msg.FileID)
+	}
+}

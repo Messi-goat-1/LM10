@@ -24,10 +24,10 @@ func main() {
 
 	redis := lmgate.NewRedisService(redisAddr)
 	if err := redis.Ping(); err != nil {
-		log.Fatalf("❌ Failed to connect to Redis: %v", err)
+		log.Fatalf("❌ فشل الاتصال بـ Redis: %v", err)
 	}
 
-	log.Println("✅ Connected to Redis")
+	log.Println("✅ تم الاتصال بـ Redis")
 	// ==================================================
 
 	// ==================================================
@@ -44,16 +44,16 @@ func main() {
 	for i := 1; i <= 20; i++ {
 		rabbit, err = lmgate.NewRabbitClient(rabbitURL)
 		if err == nil {
-			log.Println("✅ Connected to RabbitMQ")
+			log.Println("✅ تم الاتصال بـ RabbitMQ")
 			break
 		}
 
-		log.Printf("⏳ RabbitMQ not ready (attempt %d/20): %v", i, err)
+		log.Printf("⏳ RabbitMQ غير جاهز (محاولة %d/20): %v", i, err)
 		time.Sleep(1 * time.Second)
 	}
 
 	if err != nil {
-		log.Fatal("❌ Failed to connect to RabbitMQ after multiple attempts")
+		log.Fatal("❌ فشل الاتصال بـ RabbitMQ بعد عدة محاولات")
 	}
 
 	defer rabbit.Close()
@@ -71,11 +71,20 @@ func main() {
 	// ==================================================
 	dispatcher := handlers.NewEventDispatcher()
 
-	dispatcher.RegisterHandler("file.detected", handlers.NewFileDetectedHandler(manager))
+	dispatcher.RegisterHandler(
+		"file.detected",
+		handlers.NewFileDetectedHandler(manager),
+	)
 
-	dispatcher.RegisterHandler("file.chunk", handlers.NewFileChunkHandler(manager))
+	dispatcher.RegisterHandler(
+		"file.chunk",
+		handlers.NewFileChunkHandler(manager),
+	)
 
-	dispatcher.RegisterHandler("pcap.analyze", handlers.NewPCAPAnalyzeHandler(pcapService))
+	dispatcher.RegisterHandler(
+		"pcap.analyze",
+		handlers.NewPCAPAnalyzeHandler(pcapService),
+	)
 	// ==================================================
 
 	// ==================================================
@@ -95,6 +104,6 @@ func main() {
 	})
 	// ==================================================
 
-	log.Println("🚀 Server is running and waiting for messages...")
+	log.Println("🚀 Server running, waiting for messages...")
 	select {}
 }

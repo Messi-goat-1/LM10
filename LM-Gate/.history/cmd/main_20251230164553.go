@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"os"
-	"time"
 
 	lmgate "LM-Gate"
 	"LM-Gate/events"
@@ -15,47 +14,33 @@ import (
 func main() {
 
 	// ==================================================
-	// Redis Connection (Health Check)
+	// Redis Connection (Health Check فقط)
 	// ==================================================
 	redisAddr := os.Getenv("REDIS_ADDR")
 	if redisAddr == "" {
-		redisAddr = "redis:6379"
+		redisAddr = "localhost:6379"
 	}
 
 	redis := lmgate.NewRedisService(redisAddr)
 	if err := redis.Ping(); err != nil {
-		log.Fatalf("❌ Failed to connect to Redis: %v", err)
+		log.Fatalf("❌ فشل الاتصال بـ Redis: %v", err)
 	}
 
-	log.Println("✅ Connected to Redis")
+	log.Println("✅ تم الاتصال بـ Redis")
 	// ==================================================
 
 	// ==================================================
-	// RabbitMQ Connection (Retry)
+	// RabbitMQ Connection
 	// ==================================================
 	rabbitURL := os.Getenv("RABBITMQ_URL")
 	if rabbitURL == "" {
-		rabbitURL = "amqp://guest:guest@rabbitmq:5672/"
+		rabbitURL = "amqp://guest:guest@localhost:5672/"
 	}
 
-	var rabbit *lmgate.RabbitClient
-	var err error
-
-	for i := 1; i <= 20; i++ {
-		rabbit, err = lmgate.NewRabbitClient(rabbitURL)
-		if err == nil {
-			log.Println("✅ Connected to RabbitMQ")
-			break
-		}
-
-		log.Printf("⏳ RabbitMQ not ready (attempt %d/20): %v", i, err)
-		time.Sleep(1 * time.Second)
-	}
-
+	rabbit, err := lmgate.NewRabbitClient(rabbitURL)
 	if err != nil {
-		log.Fatal("❌ Failed to connect to RabbitMQ after multiple attempts")
+		log.Fatal(err)
 	}
-
 	defer rabbit.Close()
 	// ==================================================
 
@@ -71,11 +56,20 @@ func main() {
 	// ==================================================
 	dispatcher := handlers.NewEventDispatcher()
 
-	dispatcher.RegisterHandler("file.detected", handlers.NewFileDetectedHandler(manager))
+	dispatcher.RegisterHandler(
+		"file.detected",
+		handlers.NewFileDetectedHandler(manager),
+	)
 
-	dispatcher.RegisterHandler("file.chunk", handlers.NewFileChunkHandler(manager))
+	dispatcher.RegisterHandler(
+		"file.chunk",
+		handlers.NewFileChunkHandler(manager),
+	)
 
-	dispatcher.RegisterHandler("pcap.analyze", handlers.NewPCAPAnalyzeHandler(pcapService))
+	dispatcher.RegisterHandler(
+		"pcap.analyze",
+		handlers.NewPCAPAnalyzeHandler(pcapService),
+	)
 	// ==================================================
 
 	// ==================================================
@@ -95,6 +89,6 @@ func main() {
 	})
 	// ==================================================
 
-	log.Println("🚀 Server is running and waiting for messages...")
+	log.Println("🚀 Server running, waiting for messages...")
 	select {}
 }
