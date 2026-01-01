@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   rabbitmq:
     image: rabbitmq:3-management
@@ -6,16 +8,21 @@ services:
       - "5672:5672"
       - "15672:15672"
 
+  # في ملف docker-compose.yml
   redis:
     image: redis:alpine
     container_name: redis_cache
-
+    ports:
+      - "6380:6379" # تغيير المنفذ الخارجي إلى 6380 بدلاً من 6379
   server:
     build: .
     container_name: lmgate-server
     environment:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
       - REDIS_ADDR=redis:6379
+    volumes:
+      # ربط سطح المكتب بمجلد /data داخل الحاوية لكي يرى السيرفر ملف messi.pcap
+      - /home/messi/Desktop:/data 
     depends_on:
       - rabbitmq
       - redis

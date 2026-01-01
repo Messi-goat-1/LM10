@@ -10,12 +10,16 @@ services:
     image: redis:alpine
     container_name: redis_cache
 
+  services:
+  # ... بقية الخدمات ...
   server:
     build: .
     container_name: lmgate-server
     environment:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
       - REDIS_ADDR=redis:6379
+    volumes:
+      - /home/messi/Desktop:/data  # ربط سطح المكتب بمجلد data داخل الحاوية
     depends_on:
       - rabbitmq
       - redis

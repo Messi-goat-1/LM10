@@ -1,7 +1,5 @@
 package events
 
-import "time"
-
 // FileDetectedPayload contains technical details about a detected file.
 //
 // NOTE: This payload is used when the system discovers a new file
@@ -40,5 +38,5 @@ type FileDetectedEvent struct {
 	Payload FileDetectedPayload `json:"payload"`
 
 	// Timestamp records when the file was detected.
-	Timestamp time.Time `json:"timestamp"`
+	Timestamp string `json:"timestamp"`
 }

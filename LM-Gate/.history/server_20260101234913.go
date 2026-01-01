@@ -2,9 +2,7 @@ package lmgate
 
 import (
 	"LM-Gate/analysis"
-	"LM-Gate/events"
 	"LM-Gate/services"
-
 	"context"
 	"fmt"
 	"os"

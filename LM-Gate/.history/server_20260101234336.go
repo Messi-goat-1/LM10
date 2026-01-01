@@ -2,13 +2,13 @@ package lmgate
 
 import (
 	"LM-Gate/analysis"
-	"LM-Gate/events"
-	"LM-Gate/services"
-
+	LM-Gate/
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // OnMessage is the main server entry point.
@@ -16,23 +16,38 @@ import (
 //
 // NOTE: This function acts as the orchestrator for the whole flow.
 // TODO: Add structured logging for each step.
-func OnMessage(msg ChunkMessage, mgr *services.Manager) error {
-	// ... منطق التخزين المعتاد
+func OnMessage(msg ChunkMessage) error {
+	if err := ValidateMessage(msg); err != nil {
+		return err
+	}
+
 	if msg.IsEOF {
+		// 1. تجميع الملف
 		filePath, err := AssembleFile(msg.FileID)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to assemble file: %v", err)
 		}
 
-		// هنا نستخدم الـ Manager بشكل صحيح
-		mgr.OnFileCollection(events.FileCollectionPayload{
-			CollectionID: msg.FileID,
-			FileName:     msg.FileID + ".pcap",
-			FinalPath:    filePath,
-			Status:       "success",
-		})
-		return nil
+		// 2. إنشاء حدث التجميع (هنا الإضافة)
+		collectionEvent := events.FileCollectionEvent{
+			Payload: events.FileCollectionPayload{
+				CollectionID: msg.FileID,
+				FileName:     msg.FileID + ".pcap",
+				FinalPath:    filePath,
+				Status:       "assembled_successfully",
+			},
+			Timestamp: time.Now(),
+		}
+
+		// 3. إرسال الحدث إلى الـ Manager أو عبر RabbitMQ
+		// (يمكنك استخدام slog هنا لتوثيق نجاح التجميع)
+		slog.Info("📦 File successfully assembled and collection event created",
+			slog.String("collection_id", msg.FileID))
+
+		// 4. البدء في المعالجة
+		return ProcessFile(msg.FileID, filePath)
 	}
+
 	return StoreChunk(msg)
 }
 
@@ -129,4 +144,16 @@ func ProcessFile(fileID string, filePath string) error {
 // TODO: Add retry or safety checks before deletion.
 func Cleanup(fileID string) {
 	os.RemoveAll(filepath.Join("temp_chunks", fileID))
+}
+
+// FakeSender is a helper for testing.
+//
+// NOTE: Used to simulate message sending without network or MQ.
+type FakeSender struct{}
+
+// Send forwards the message directly to OnMessage.
+//
+// TODO: Add test assertions around Send behavior.
+func (f *FakeSender) Send(msg ChunkMessage) error {
+	return OnMessage(msg)
 }

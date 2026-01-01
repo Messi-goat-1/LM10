@@ -3,13 +3,18 @@ package services
 import (
 	"LM-Gate/events"
 	"log/slog" // استيراد المكتبة الجديدة
+	"os"
 )
 
 type FileService struct {
 	logger *slog.Logger
 }
 
-func NewFileService(logger *slog.Logger) *FileService {
+func NewFileService() *FileService {
+	// إعداد الـ logger ليكون بتنسيق JSON (مناسب جداً للإنتاج)
+	// أو TextHandler إذا كنت تفضل القراءة البشرية البسيطة
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
 	return &FileService{
 		logger: logger,
 	}

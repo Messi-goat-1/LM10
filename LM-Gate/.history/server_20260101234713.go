@@ -2,9 +2,6 @@ package lmgate
 
 import (
 	"LM-Gate/analysis"
-	"LM-Gate/events"
-	"LM-Gate/services"
-
 	"context"
 	"fmt"
 	"os"
@@ -16,25 +13,6 @@ import (
 //
 // NOTE: This function acts as the orchestrator for the whole flow.
 // TODO: Add structured logging for each step.
-func OnMessage(msg ChunkMessage, mgr *services.Manager) error {
-	// ... منطق التخزين المعتاد
-	if msg.IsEOF {
-		filePath, err := AssembleFile(msg.FileID)
-		if err != nil {
-			return err
-		}
-
-		// هنا نستخدم الـ Manager بشكل صحيح
-		mgr.OnFileCollection(events.FileCollectionPayload{
-			CollectionID: msg.FileID,
-			FileName:     msg.FileID + ".pcap",
-			FinalPath:    filePath,
-			Status:       "success",
-		})
-		return nil
-	}
-	return StoreChunk(msg)
-}
 
 // ValidateMessage performs basic validation on incoming messages.
 //

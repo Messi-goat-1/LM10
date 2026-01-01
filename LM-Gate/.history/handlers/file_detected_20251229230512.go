@@ -4,7 +4,6 @@ import (
 	"LM-Gate/events"
 	"LM-Gate/services"
 	"encoding/json"
-	"log"
 )
 
 // FileDetectedHandler connects file detected events
@@ -36,14 +35,18 @@ func NewFileDetectedHandler(fs *services.Manager) *FileDetectedHandler {
 func (h *FileDetectedHandler) Handle(data []byte) error {
 	var event events.FileDetectedEvent
 
-	// فحص الخطأ أثناء تحويل JSON
 	if err := json.Unmarshal(data, &event); err != nil {
-		log.Printf("[ERROR] Failed to unmarshal event: %v", err)
 		return err
 	}
 
-	// تمرير الـ Payload إلى الـ Manager
-	h.fileService.OnFileDetected(event.Payload)
+	h.fileService.OnFileDetected(
+		event.Payload.FileID,
+		event.Payload.FileName,
+		event.Payload.SizeBytes,
+		event.Payload.FileType,
+		event.Payload.Checksum,
+	)
+
 	return nil
 }
 
@@ -53,14 +56,6 @@ file.detected event
 FileDetectedHandler
    ↓
 services.Manager.OnFileDetected
-
-
-
-Publisher
- → RabbitMQ
- → FileDetectedHandler
- → FileService.OnFileDetected
-
 
 
 */

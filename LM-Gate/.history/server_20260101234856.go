@@ -2,9 +2,7 @@ package lmgate
 
 import (
 	"LM-Gate/analysis"
-	"LM-Gate/events"
 	"LM-Gate/services"
-
 	"context"
 	"fmt"
 	"os"
@@ -129,4 +127,16 @@ func ProcessFile(fileID string, filePath string) error {
 // TODO: Add retry or safety checks before deletion.
 func Cleanup(fileID string) {
 	os.RemoveAll(filepath.Join("temp_chunks", fileID))
+}
+
+// FakeSender is a helper for testing.
+//
+// NOTE: Used to simulate message sending without network or MQ.
+type FakeSender struct{}
+
+// Send forwards the message directly to OnMessage.
+//
+// TODO: Add test assertions around Send behavior.
+func (f *FakeSender) Send(msg ChunkMessage) error {
+	return OnMessage(msg)
 }

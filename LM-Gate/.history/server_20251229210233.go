@@ -2,9 +2,6 @@ package lmgate
 
 import (
 	"LM-Gate/analysis"
-	"LM-Gate/events"
-	"LM-Gate/services"
-
 	"context"
 	"fmt"
 	"os"
@@ -16,23 +13,33 @@ import (
 //
 // NOTE: This function acts as the orchestrator for the whole flow.
 // TODO: Add structured logging for each step.
-func OnMessage(msg ChunkMessage, mgr *services.Manager) error {
-	// ... منطق التخزين المعتاد
+func OnMessage(msg ChunkMessage) error {
+	if err := ValidateMessage(msg); err != nil {
+		return err
+	}
+
+	// If this message is the end-of-file marker
 	if msg.IsEOF {
+		// NOTE: EOF means all chunks were already sent.
+
+		// 1. Assemble the file and get its final path
 		filePath, err := AssembleFile(msg.FileID)
 		if err != nil {
+			return fmt.Errorf("failed to assemble file: %v", err)
+		}
+
+		// 2. Start processing the file (analysis step)
+		// TODO: Run this step asynchronously if file size is large.
+		if err := ProcessFile(msg.FileID, filePath); err != nil {
 			return err
 		}
 
-		// هنا نستخدم الـ Manager بشكل صحيح
-		mgr.OnFileCollection(events.FileCollectionPayload{
-			CollectionID: msg.FileID,
-			FileName:     msg.FileID + ".pcap",
-			FinalPath:    filePath,
-			Status:       "success",
-		})
+		// 3. Clean temporary chunks after processing
+		Cleanup(msg.FileID)
 		return nil
 	}
+
+	// If this is a normal chunk, store it on disk
 	return StoreChunk(msg)
 }
 
@@ -129,4 +136,16 @@ func ProcessFile(fileID string, filePath string) error {
 // TODO: Add retry or safety checks before deletion.
 func Cleanup(fileID string) {
 	os.RemoveAll(filepath.Join("temp_chunks", fileID))
+}
+
+// FakeSender is a helper for testing.
+//
+// NOTE: Used to simulate message sending without network or MQ.
+type FakeSender struct{}
+
+// Send forwards the message directly to OnMessage.
+//
+// TODO: Add test assertions around Send behavior.
+func (f *FakeSender) Send(msg ChunkMessage) error {
+	return OnMessage(msg)
 }

@@ -2,6 +2,7 @@ package services
 
 import (
 	"LM-Gate/events"
+	"log"
 	"log/slog" // استيراد المكتبة الجديدة
 )
 
@@ -33,4 +34,10 @@ func (s *FileService) OnFileDetected(payload events.FileDetectedPayload) {
 		slog.String("type", payload.FileType),
 		slog.String("checksum", payload.Checksum),
 	)
+}
+
+// داخل services/file_service.go
+func (s *FileService) OnFileCollection(payload events.FileCollectionPayload) {
+	// استخدم slog الذي أضفناه سابقاً لطباعة النجاح
+	log.Printf("📦 [SERVICE] Collection Completed: %s", payload.CollectionID)
 }

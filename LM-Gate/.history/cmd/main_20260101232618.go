@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log/slog"
+	"log/slog" // إضافة مكتبة slog
 	"os"
 	"time"
 
@@ -12,13 +12,13 @@ import (
 
 func main() {
 	// ==================================================
-	// 1. إعداد slog (بصيغة نصية للـ Terminal)
+	// إعداد slog (بصيغة نصية للـ Terminal)
 	// ==================================================
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
 	// ==================================================
-	// 2. Redis Connection (Health Check)
+	// Redis Connection (Health Check)
 	// ==================================================
 	redisAddr := os.Getenv("REDIS_ADDR")
 	if redisAddr == "" {
@@ -30,10 +30,11 @@ func main() {
 		logger.Error("❌ Failed to connect to Redis", slog.Any("error", err))
 		os.Exit(1)
 	}
+
 	logger.Info("✅ Connected to Redis")
 
 	// ==================================================
-	// 3. RabbitMQ Connection (Retry)
+	// RabbitMQ Connection (Retry)
 	// ==================================================
 	rabbitURL := os.Getenv("RABBITMQ_URL")
 	if rabbitURL == "" {
@@ -42,12 +43,14 @@ func main() {
 
 	var rabbit *lmgate.RabbitClient
 	var err error
+
 	for i := 1; i <= 20; i++ {
 		rabbit, err = lmgate.NewRabbitClient(rabbitURL)
 		if err == nil {
 			logger.Info("✅ Connected to RabbitMQ")
 			break
 		}
+
 		logger.Warn("⏳ RabbitMQ not ready", slog.Int("attempt", i), slog.Any("error", err))
 		time.Sleep(1 * time.Second)
 	}
@@ -56,35 +59,27 @@ func main() {
 		logger.Error("❌ Failed to connect to RabbitMQ after multiple attempts")
 		os.Exit(1)
 	}
+
 	defer rabbit.Close()
 
 	// ==================================================
-	// 4. Services (حقن الـ logger والخدمات)
+	// Services (تمرير الـ logger للخدمة)
 	// ==================================================
 	fileService := services.NewFileService(logger)
 	manager := services.NewManager(fileService)
 
 	// ==================================================
-	// 5. Event Handlers
+	// Event Handlers
 	// ==================================================
-	fileDetectedHandler := handlers.NewFileDetectedHandler(manager)
-	fileCollectionHandler := handlers.NewFileCollectionHandler(manager)
+	fileHandler := handlers.NewFileDetectedHandler(manager)
 
 	// ==================================================
-	// 6. RabbitMQ Consumers
+	// RabbitMQ Consumer
 	// ==================================================
-
-	// استهلاك رسائل اكتشاف الملفات
 	rabbit.ConsumeMessages("file_events_queue", func(data []byte) {
-		if err := fileDetectedHandler.Handle(data); err != nil {
+		// توجيه البيانات مباشرة إلى الـ Handler المخصص لـ Detected
+		if err := fileHandler.Handle(data); err != nil {
 			logger.Error("❌ Error handling detected file", slog.Any("error", err))
-		}
-	})
-
-	// استهلاك رسائل تجميع الملفات
-	rabbit.ConsumeMessages("file_collection_queue", func(data []byte) {
-		if err := fileCollectionHandler.Handle(data); err != nil {
-			logger.Error("❌ Error handling collection file", slog.Any("error", err))
 		}
 	})
 

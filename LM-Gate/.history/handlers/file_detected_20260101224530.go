@@ -4,7 +4,6 @@ import (
 	"LM-Gate/events"
 	"LM-Gate/services"
 	"encoding/json"
-	"log"
 )
 
 // FileDetectedHandler connects file detected events
@@ -35,15 +34,9 @@ func NewFileDetectedHandler(fs *services.Manager) *FileDetectedHandler {
 // Forward all payload data to the service layer
 func (h *FileDetectedHandler) Handle(data []byte) error {
 	var event events.FileDetectedEvent
+	json.Unmarshal(data, &event)
 
-	// فحص الخطأ أثناء تحويل JSON
-	if err := json.Unmarshal(data, &event); err != nil {
-		log.Printf("[ERROR] Failed to unmarshal event: %v", err)
-		return err
-	}
-
-	// تمرير الـ Payload إلى الـ Manager
-	h.fileService.OnFileDetected(event.Payload)
+	h.manager.OnFileDetected(event.Payload)
 	return nil
 }
 
