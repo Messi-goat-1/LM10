@@ -1,11 +1,9 @@
 package lmgate
 
 import (
-	"LM-Gate/analysis"
 	"LM-Gate/events"
 	"LM-Gate/services"
 
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -112,15 +110,6 @@ func AssembleFile(fileID string) (string, error) {
 	}
 
 	return finalPath, nil
-}
-
-// ProcessFile handles the fully assembled file.
-//
-// NOTE: The file is passed by path, not loaded into memory.
-// TODO: Add timeout or context support.
-func ProcessFile(fileID string, filePath string) error {
-	ctx := context.Background() // أو context.WithTimeout
-	return analysis.AnalyzePCAP(ctx, fileID, filePath)
 }
 
 // Cleanup removes all temporary data related to a file.

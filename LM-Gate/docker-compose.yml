@@ -1,21 +1,28 @@
+version: "3.8"
+
 services:
+  lm-api:
+    image: lm-api:latest
+    container_name: lm-api
+    ports:
+      - "8080:8080"
+    mem_limit: 128m
+    cpus: "0.25"
+    restart: unless-stopped
+
+  lm-worker:
+    image: lm-worker:latest
+    container_name: lm-worker
+    mem_limit: 256m
+    cpus: "0.50"
+    restart: unless-stopped
+
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
     ports:
       - "5672:5672"
       - "15672:15672"
-
-  redis:
-    image: redis:alpine
-    container_name: redis_cache
-
-  server:
-    build: .
-    container_name: lmgate-server
-    environment:
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-      - REDIS_ADDR=redis:6379
-    depends_on:
-      - rabbitmq
-      - redis
+    mem_limit: 128m
+    cpus: "0.25"
+    restart: unless-stopped

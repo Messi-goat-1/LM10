@@ -6,6 +6,7 @@ import (
 	"time"
 
 	lmgate "LM-Gate"
+	api "LM-Gate/API"
 	"LM-Gate/handlers"
 	"LM-Gate/services"
 )
@@ -87,6 +88,7 @@ func main() {
 			logger.Error("❌ Error handling collection file", slog.Any("error", err))
 		}
 	})
+	go api.RunAPIServer()
 
 	logger.Info("🚀 Server is running and waiting for messages...")
 	select {}
