@@ -108,7 +108,12 @@ func buildMultipartBody(fieldName string, file *os.File, fileName string) (*byte
 }
 
 // 3️⃣ إنشاء HTTP Request
-func createUploadRequest(url string, body *bytes.Buffer, contentType string, apiKey string) (*http.Request, error) {
+func createUploadRequest(
+	url string,
+	body *bytes.Buffer,
+	contentType string,
+	apiKey string,
+) (*http.Request, error) {
 
 	req, err := http.NewRequest("POST", url, body)
 	if err != nil {

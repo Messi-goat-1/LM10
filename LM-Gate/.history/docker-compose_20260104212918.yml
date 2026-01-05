@@ -1,24 +1,23 @@
-version: "3.9"
-
 services:
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
-    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
 
   redis:
     image: redis:alpine
     container_name: redis_cache
-    restart: unless-stopped
 
   server:
     build: .
     container_name: lmgate-server
     ports:
       - "8080:8080"
-    env_file:
-      - .env
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - REDIS_ADDR=redis:6379
     depends_on:
       - rabbitmq
       - redis
-    restart: unless-stopped
