@@ -16,10 +16,13 @@ CONFIG
 ========================
 */
 
-const (
-	apiURL = "http://localhost:8080/split-pcap"
-	apiKey = "test-key"
-)
+func getAPIURL() string {
+	return os.Getenv("LM_API_URL")
+}
+
+func getAPIKey() string {
+	return os.Getenv("LM_API_KEY")
+}
 
 /*
 ========================
@@ -41,7 +44,7 @@ UPLOAD FLOW
 func uploadFile(filePath string) error {
 	file, err := openFile(filePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open file: %w", err)
 	}
 	defer file.Close()
 
@@ -51,22 +54,31 @@ func uploadFile(filePath string) error {
 		filepath.Base(filePath),
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to build multipart body: %w", err)
 	}
+
+	apiURL := getAPIURL()
+	apiKey := getAPIKey()
+
+	if apiURL == "" {
+		return fmt.Errorf("API URL is not configured (LM_API_URL)")
+	}
+
+	fmt.Println("Using API:", apiURL)
 
 	req, err := createUploadRequest(apiURL, body, contentType, apiKey)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create request: %w", err)
 	}
 
 	resp, err := sendRequest(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("request failed: %w", err)
 	}
 
 	result, err := readResponse(resp)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read response: %w", err)
 	}
 
 	fmt.Println("Server response:")
@@ -75,6 +87,7 @@ func uploadFile(filePath string) error {
 }
 
 /*
+
 ========================
 HELPER FUNCTIONS
 ========================
@@ -123,6 +136,7 @@ func createUploadRequest(url string, body *bytes.Buffer, contentType string, api
 
 // 4️⃣ إرسال الطلب
 func sendRequest(req *http.Request) (*http.Response, error) {
+	fmt.Println("Uploading file, please wait...")
 	client := &http.Client{}
 	return client.Do(req)
 }
