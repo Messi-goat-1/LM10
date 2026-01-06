@@ -1,0 +1,13 @@
+# secrets
+.env
+
+# editor history
+.history/
+
+# pcap files
+*.pcap
+*.PCAP
+
+# binaries
+lm
+*.deb
