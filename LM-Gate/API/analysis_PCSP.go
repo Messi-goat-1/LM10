@@ -16,10 +16,10 @@ import (
 
 // الإعدادات العامة
 const (
-	MaxPacketsPerChunk = 1000             // عدد الحزم لكل جزء
-	OutputDir          = "chunks"         // مجلد تخزين الأجزاء
-	CleanupInterval    = 10 * time.Minute // فحص المجلد كل 10 دقائق
-	MaxFileAge         = 30 * time.Minute // حذف الملفات التي عمرها أكثر من 30 دقيقة
+	MaxPacketsPerChunk = 1000                   // عدد الحزم لكل جزء
+	OutputDir          = "/data/uploads/chunks" // مجلد تخزين الأجزاء
+	CleanupInterval    = 10 * time.Minute       // فحص المجلد كل 10 دقائق
+	MaxFileAge         = 30 * time.Minute       // حذف الملفات التي عمرها أكثر من 30 دقيقة
 )
 
 // --- [ الدالات الخاصة بـ API ] ---
