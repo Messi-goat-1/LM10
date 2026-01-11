@@ -18,7 +18,12 @@ services:
       - "8080:8080"
     env_file:
       - .env
+    volumes:
+      - uploads_data:/data/uploads
     depends_on:
       - rabbitmq
       - redis
     restart: unless-stopped
+
+volumes:
+  uploads_data:

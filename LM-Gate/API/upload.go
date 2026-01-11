@@ -86,6 +86,56 @@ func uploadFile(filePath string) error {
 	return nil
 }
 
+func saveUploadedFile(file multipart.File, filename string, baseDir string) (string, error) {
+
+	// تأكد من وجود المجلد
+	if err := os.MkdirAll(baseDir, 0755); err != nil {
+		return "", err
+	}
+
+	// حماية من path traversal
+	safeName := filepath.Base(filename)
+	dstPath := filepath.Join(baseDir, safeName)
+
+	dst, err := os.Create(dstPath)
+	if err != nil {
+		return "", err
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		return "", err
+	}
+
+	return dstPath, nil
+}
+
+func UploadHandler(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(100 << 20); err != nil {
+		http.Error(w, "invalid form", 400)
+		return
+	}
+
+	file, header, err := r.FormFile("pcapfile")
+	if err != nil {
+		http.Error(w, "file missing", 400)
+		return
+	}
+	defer file.Close()
+
+	path, err := saveUploadedFile(
+		file,
+		header.Filename,
+		"/data/uploads",
+	)
+	if err != nil {
+		http.Error(w, "save failed", 500)
+		return
+	}
+
+	fmt.Fprintf(w, "File saved: %s", path)
+}
+
 /*
 
 ========================
