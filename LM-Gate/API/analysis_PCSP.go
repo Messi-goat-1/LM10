@@ -66,6 +66,7 @@ func ProcessPcap(inputFile io.Reader, originalName string) ([]string, error) {
 	var createdFiles []string
 	var currentWriter *pcapgo.Writer
 	var currentFile *os.File
+
 	packetCount := 0
 	chunkID := 0
 
@@ -74,8 +75,16 @@ func ProcessPcap(inputFile io.Reader, originalName string) ([]string, error) {
 		if err == io.EOF {
 			break
 		}
+		if err != nil {
+			return nil, fmt.Errorf("failed reading packet: %w", err)
+		}
 
-		// إنشاء ملف جديد عند الوصول للحد الأقصى لكل جزء
+		// Log عند أول packet (تشخيص)
+		if packetCount == 0 {
+			fmt.Println("📦 First packet read successfully")
+		}
+
+		// إنشاء ملف chunk جديد كل MaxPacketsPerChunk
 		if packetCount%MaxPacketsPerChunk == 0 {
 			if currentFile != nil {
 				currentFile.Close()
@@ -87,16 +96,31 @@ func ProcessPcap(inputFile io.Reader, originalName string) ([]string, error) {
 				return nil, err
 			}
 
+			fmt.Printf("🧩 Created new chunk file: %s\n", chunkName)
+
 			createdFiles = append(createdFiles, chunkName)
 			chunkID++
 		}
 
-		currentWriter.WritePacket(ci, data)
+		// كتابة الحزمة داخل الـ chunk
+		if err := currentWriter.WritePacket(ci, data); err != nil {
+			return nil, fmt.Errorf("failed writing packet: %w", err)
+		}
+
 		packetCount++
 	}
 
 	if currentFile != nil {
 		currentFile.Close()
+	}
+
+	// Log نهائي بعد الانتهاء
+	fmt.Printf("📊 Total packets processed: %d\n", packetCount)
+	fmt.Printf("📁 Total chunks created: %d\n", len(createdFiles))
+
+	// حماية: ملف بدون packets
+	if packetCount == 0 {
+		return nil, fmt.Errorf("pcap file contains no packets")
 	}
 
 	return createdFiles, nil
