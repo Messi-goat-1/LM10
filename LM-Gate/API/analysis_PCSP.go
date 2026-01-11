@@ -69,23 +69,34 @@ func ProcessPcap(inputFile io.Reader, originalName string) ([]string, error) {
 	packetCount := 0
 	chunkID := 0
 
+	fmt.Println("🚀 Starting PCAP processing")
+	fmt.Printf("📍 Output directory: %s\n", OutputDir)
+	fmt.Printf("📦 Max packets per chunk: %d\n", MaxPacketsPerChunk)
+
 	for {
 		data, ci, err := reader.ReadPacketData()
 		if err == io.EOF {
 			break
 		}
+		if err != nil {
+			return nil, fmt.Errorf("failed reading packet: %w", err)
+		}
 
-		// إنشاء ملف جديد عند الوصول للحد الأقصى لكل جزء
+		// إنشاء ملف جديد عند بداية كل chunk
 		if packetCount%MaxPacketsPerChunk == 0 {
 			if currentFile != nil {
 				currentFile.Close()
 			}
 
 			chunkName := fmt.Sprintf("chunk_%d_%s", chunkID, originalName)
-			currentFile, currentWriter, err = createNewChunk(chunkName, reader.LinkType())
+			fullPath := filepath.Join(OutputDir, chunkName)
+
+			currentFile, currentWriter, err = createNewChunk(fullPath, reader.LinkType())
 			if err != nil {
 				return nil, err
 			}
+
+			fmt.Printf("🧩 Created new chunk file: %s\n", fullPath)
 
 			createdFiles = append(createdFiles, chunkName)
 			chunkID++
@@ -98,6 +109,24 @@ func ProcessPcap(inputFile io.Reader, originalName string) ([]string, error) {
 	if currentFile != nil {
 		currentFile.Close()
 	}
+
+	if packetCount == 0 {
+		return nil, fmt.Errorf("pcap file contains no packets")
+	}
+
+	// 🟢 ملخص نهائي واضح
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Println("📂 Chunk files summary:")
+	for i, file := range createdFiles {
+		fmt.Printf("  [%d] %s\n", i+1, filepath.Join(OutputDir, file))
+	}
+
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Printf("📊 Total packets processed: %d\n", packetCount)
+	fmt.Printf("📁 Total chunks created: %d\n", len(createdFiles))
+	fmt.Printf("📦 Packets per chunk: %d\n", MaxPacketsPerChunk)
+	fmt.Printf("📍 Stored at: %s\n", OutputDir)
+	fmt.Println("✅ PCAP processing completed successfully")
 
 	return createdFiles, nil
 }
