@@ -14,7 +14,7 @@ RUN go mod download
 COPY . .
 
 # ✅ يجب تفعيل CGO هنا لأن gopacket تعتمد على C
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o server ./cmd
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o server ./cmd/server
 
 # ---------------------------------------------------
 # المرحلة الثانية: التشغيل (Runtime Stage)
