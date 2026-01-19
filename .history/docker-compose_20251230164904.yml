@@ -1,0 +1,31 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- إضافة Redis هنا ---
+  redis:
+    image: redis:alpine
+    container_name: redis_cache
+    ports:
+  - "6380:6379"
+
+  server:
+    build: .
+    container_name: lmgate-server
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - REDIS_URL=redis:6379 # إضافة عنوان Redis
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis: # السيرفر يعتمد على وجود Redis
+        condition: service_started

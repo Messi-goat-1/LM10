@@ -1,0 +1,29 @@
+version: "3.8"          # إصدار docker-compose المستخدم
+
+services:               # تعريف جميع الخدمات (الحاويات)
+
+  lm-api:               # خدمة API (السيرفر)
+    image: lm-api:latest    # صورة Docker المستخدمة لتشغيل API
+    container_name: lm-api  # اسم الحاوية داخل Docker
+    ports:
+      - "8080:8080"     # فتح المنفذ 8080 (العميل يتصل بالـ API)
+    mem_limit: 128m     # تحديد الذاكرة القصوى للحاوية
+    cpus: "0.25"        # تحديد نسبة استخدام المعالج
+    restart: unless-stopped  # إعادة التشغيل تلقائيًا إلا إذا أوقفتها يدويًا
+
+  lm-worker:            # خدمة العامل (معالجة الخلفية)
+    image: lm-worker:latest  # صورة Docker الخاصة بالـ worker
+    container_name: lm-worker # اسم الحاوية
+    mem_limit: 256m     # ذاكرة أكثر لأن المعالجة أثقل
+    cpus: "0.50"        # CPU أكثر من الـ API
+    restart: unless-stopped  # إعادة التشغيل تلقائيًا
+
+  rabbitmq:             # خدمة RabbitMQ (Queue)
+    image: rabbitmq:3-management  # صورة RabbitMQ مع واجهة الإدارة
+    container_name: rabbitmq      # اسم الحاوية
+    ports:
+      - "5672:5672"     # منفذ RabbitMQ للتواصل بين الخدمات
+      - "15672:15672"   # منفذ واجهة RabbitMQ Web UI
+    mem_limit: 128m     # تحديد الذاكرة
+    cpus: "0.25"        # تحديد المعالج
+    restart: unless-stopped  # إعادة التشغيل تلقائيًا

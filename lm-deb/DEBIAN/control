@@ -1,0 +1,7 @@
+Package: lm
+Version: 0.1.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: LM Team <lm@example.com>
+Description: LM - Network Analysis CLI Tool

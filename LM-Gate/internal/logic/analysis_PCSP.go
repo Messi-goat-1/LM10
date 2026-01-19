@@ -1,6 +1,7 @@
 package logic
 
 import (
+	"LM-Gate/internal/infra"
 	"fmt"
 	"io"
 	"log"
@@ -26,39 +27,54 @@ const (
 // --- [ الدالات الخاصة بـ API ] ---
 
 func handlePcapSplit(c *gin.Context) {
+	// 1️⃣ جلب الملف المرفوع
 	fileHeader, err := c.FormFile("pcapfile")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "لم يتم العثور على ملف مرفق"})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "لم يتم العثور على ملف مرفوع",
+		})
 		return
 	}
 
-	// فتح الملف المرفوع
+	// 2️⃣ فتح الملف
 	src, err := fileHeader.Open()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل فتح الملف"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "فشل فتح الملف",
+		})
 		return
 	}
 	defer src.Close()
 
-	// معالجة التقسيم
-	createdFiles, err := ProcessPcap(src, fileHeader.Filename)
+	// 3️⃣ إنشاء FileSystem (Dependency Injection)
+	fs := infra.NewLocalFileSystem()
+
+	// 4️⃣ معالجة ملف PCAP
+	createdFiles, err := ProcessPcap(
+		fs,
+		src,
+		fileHeader.Filename,
+	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 
-	// الرد على المستخدم بنجاح العملية
+	// 5️⃣ الرد على المستخدم
 	c.JSON(http.StatusOK, gin.H{
 		"status":       "success",
 		"total_chunks": len(createdFiles),
 		"chunks":       createdFiles,
-		"note":         "ستحذف هذه الملفات تلقائياً بعد 30 دقيقة",
+		"note":         "سيتم حذف هذه الملفات تلقائيًا بعد 30 دقيقة",
 	})
 }
 
 // --- [ منطق معالجة الـ PCAP ] ---
 
-func ProcessPcap(inputFile io.Reader, originalName string) ([]string, error) {
+func ProcessPcap(fs infra.FileSystem, inputFile io.Reader, originalName string) ([]string, error) {
+
 	reader, err := pcapgo.NewReader(inputFile)
 	if err != nil {
 		return nil, fmt.Errorf("تنسيق ملف PCAP غير صالح")
@@ -66,7 +82,7 @@ func ProcessPcap(inputFile io.Reader, originalName string) ([]string, error) {
 
 	var createdFiles []string
 	var currentWriter *pcapgo.Writer
-	var currentFile *os.File
+	var currentFile io.Closer // 👈 لم نعد مربوطين بـ os.File
 	packetCount := 0
 	chunkID := 0
 
@@ -85,6 +101,7 @@ func ProcessPcap(inputFile io.Reader, originalName string) ([]string, error) {
 
 		// إنشاء ملف جديد عند بداية كل chunk
 		if packetCount%MaxPacketsPerChunk == 0 {
+
 			if currentFile != nil {
 				currentFile.Close()
 			}
@@ -92,10 +109,13 @@ func ProcessPcap(inputFile io.Reader, originalName string) ([]string, error) {
 			chunkName := fmt.Sprintf("chunk_%d_%s", chunkID, originalName)
 			fullPath := filepath.Join(OutputDir, chunkName)
 
-			currentFile, currentWriter, err = createNewChunk(fullPath, reader.LinkType())
+			file, writer, err := createNewChunk(fs, fullPath, reader.LinkType())
 			if err != nil {
 				return nil, err
 			}
+
+			currentFile = file
+			currentWriter = writer
 
 			fmt.Printf("🧩 Created new chunk file: %s\n", fullPath)
 
@@ -103,7 +123,10 @@ func ProcessPcap(inputFile io.Reader, originalName string) ([]string, error) {
 			chunkID++
 		}
 
-		currentWriter.WritePacket(ci, data)
+		if err := currentWriter.WritePacket(ci, data); err != nil {
+			return nil, fmt.Errorf("write packet failed: %w", err)
+		}
+
 		packetCount++
 	}
 
@@ -115,7 +138,7 @@ func ProcessPcap(inputFile io.Reader, originalName string) ([]string, error) {
 		return nil, fmt.Errorf("pcap file contains no packets")
 	}
 
-	// 🟢 ملخص نهائي واضح
+	// 🟢 ملخص نهائي
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	fmt.Println("📂 Chunk files summary:")
 	for i, file := range createdFiles {
@@ -132,17 +155,20 @@ func ProcessPcap(inputFile io.Reader, originalName string) ([]string, error) {
 	return createdFiles, nil
 }
 
-func createNewChunk(name string, linkType layers.LinkType) (*os.File, *pcapgo.Writer, error) {
-	path := filepath.Join(OutputDir, name)
-	f, err := os.Create(path)
+func createNewChunk(fs infra.FileSystem, path string, linkType layers.LinkType) (io.Closer, *pcapgo.Writer, error) {
+
+	file, err := fs.Create(path)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	writer := pcapgo.NewWriter(f)
-	writer.WriteFileHeader(65536, linkType)
+	writer := pcapgo.NewWriter(file)
+	if err := writer.WriteFileHeader(65536, linkType); err != nil {
+		file.Close()
+		return nil, nil, err
+	}
 
-	return f, writer, nil
+	return file, writer, nil
 }
 
 // --- [ دالات التنظيف والحذف ] ---

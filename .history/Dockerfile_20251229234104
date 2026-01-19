@@ -1,0 +1,28 @@
+# المرحلة الأولى: build
+FROM golang:1.24-alpine AS builder
+
+WORKDIR /app
+
+# نسخ ملفات Go
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+# بناء السيرفر
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o server ./cmd
+# -------------------------
+
+# المرحلة الثانية: runtime
+FROM alpine:latest
+
+WORKDIR /app
+
+# نسخ الملف التنفيذي
+COPY --from=builder /app/server .
+
+# ✅ إضافة صلاحية التنفيذ
+RUN chmod +x /app/server
+
+# تشغيل السيرفر
+CMD ["./server"]
