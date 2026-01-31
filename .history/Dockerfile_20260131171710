@@ -1,0 +1,25 @@
+FROM golang:1.22-alpine
+
+WORKDIR /app
+
+# أدوات أساسية (إن كانت موجودة سابقًا ما راح تأثر)
+RUN apk add --no-cache bash ca-certificates git
+
+# تحميل التبعيات
+COPY go.mod go.sum ./
+RUN go mod download
+
+# نسخ المشروع كامل
+COPY . .
+
+# ===== الإضافة الوحيدة =====
+ARG MAIN_PATH
+
+# ===== التشغيل =====
+CMD ["sh", "-c", "go run $MAIN_PATH"]
+
+
+# ✅ يجب تفعيل CGO هنا لأن gopacket تعتمد على C
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o server ./cmd/server
+
+# ---------------------------------------------------

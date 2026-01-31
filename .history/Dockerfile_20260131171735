@@ -30,7 +30,6 @@ COPY --from=builder /app/server .
 
 # إضافة صلاحية التنفيذ
 RUN chmod +x /app/server
-ARG MAIN_PATH
 
 # تشغيل السيرفر
-CMD ["sh", "-c", "go run $MAIN_PATH"]
+CMD ["./server"]
