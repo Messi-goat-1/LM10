@@ -1,28 +1,52 @@
 version: "3.9"
 
 services:
+  # 1. ساعي البريد (الأساسي في النظام)
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
+    ports:
+      - "15672:15672" # لوحة التحكم
+      - "5672:5672"
     restart: unless-stopped
 
+  # 2. مخزن الحالة (الأساسي في النظام)
   redis:
     image: redis:alpine
     container_name: redis_cache
     restart: unless-stopped
 
-  server:
-    build: .
-    container_name: lmgate-server
+  # 3. خدمة الـ API (تشغل logic.RunAPIServer)
+  api-service:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+      args:
+        MAIN_PATH: ./cmd/api/main.go
+    container_name: lmgate-api
     ports:
       - "8080:8080"
-    env_file:
-      - .env
+    env_file: .env
+    depends_on:
+      - rabbitmq
     volumes:
       - uploads_data:/data/uploads
+    restart: unless-stopped
+
+  # 4. خدمة المعالجة (Worker - تشغل RabbitMQ Consumer + Cleanup)
+  worker-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        MAIN_PATH: ./cmd/worker/main.go
+    container_name: lmgate-worker
+    env_file: .env
     depends_on:
       - rabbitmq
       - redis
+    volumes:
+      - uploads_data:/data/uploads
     restart: unless-stopped
 
 volumes:
