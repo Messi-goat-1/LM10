@@ -3,7 +3,6 @@ package main
 import (
 	"log/slog"
 	"os"
-	"time"
 )
 
 func main() {
@@ -14,7 +13,5 @@ func main() {
 
 	// يمكن وضع منطق المراقبة أو التنسيق هنا
 	logger.Info("📡 Watching all events...")
-	for {
-		time.Sleep(time.Hour)
-	}
+	select {}
 }
